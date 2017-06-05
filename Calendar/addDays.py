@@ -3,6 +3,8 @@ from datetime import datetime, date, timedelta
 import calendar
 
 today = date.today()
+if datetime.now().hour < 7:
+    today -= timedelta(days=1)
 
 with open('Calendar.json', 'r') as f:
     dataArray = json.load(f)

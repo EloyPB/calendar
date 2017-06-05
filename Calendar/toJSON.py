@@ -39,10 +39,10 @@ with open('todo.txt') as f:
                }
         dataArray.append(day)
           
-with open('Calendar.json', 'w') as f:
+with open('CalendarNEW.json', 'w') as f:
     json.dump(dataArray, f, indent=4, separators=(',', ': '), sort_keys=True, ensure_ascii=False)
   
-with open('Calendar.json', 'r') as f:
+with open('CalendarNEW.json', 'r') as f:
     dataArray = json.load(f)
 
 plt.plot([day['nota'] for day in dataArray])
