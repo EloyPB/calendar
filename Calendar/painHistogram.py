@@ -5,7 +5,7 @@ import numpy.ma as ma
 import matplotlib.pyplot as plt
 import json
 
-with open('Calendar.json', 'r') as f:
+with open('/media/eloy/OS/Users/Eloy/OneDrive/Calendar.json', 'r') as f:
     dataArray = json.load(f)
     pain = [day['pain'] for day in dataArray]
         

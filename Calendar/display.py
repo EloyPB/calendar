@@ -12,7 +12,7 @@ print("\n\n")
 numDays = int(sys.argv[-1])
 diasdelasemana = ["Lunes     ", "Martes    ", "Miércoles ", "Jueves    ", "Viernes   ", "Sábado    ", "Domingo   "]
 
-with open('Calendar.json', 'r') as f:
+with open('/media/eloy/OS/Users/Eloy/OneDrive/Calendar.json', 'r') as f:
     dataArray = json.load(f)
     
     for dayNum in range(numDays,0,-1):

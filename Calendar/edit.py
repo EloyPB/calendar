@@ -4,7 +4,7 @@ import sys
 import json
 from datetime import datetime, date, timedelta
 
-if len(sys.argv) == 1 or sys.argv[1] == "today" or "0":
+if len(sys.argv) == 1 or sys.argv[1] in ("today", "0"):
     dayIndex = -1
 else:
     if sys.argv[1] == "yesterday":
@@ -19,7 +19,7 @@ else:
         dayIndex = (editDate - today).days -1
 
 
-with open('Calendar.json', 'r') as f:
+with open('/media/eloy/OS/Users/Eloy/OneDrive/Calendar.json', 'r') as f:
     dataArray = json.load(f)
     
     day = {'fecha' : dataArray[dayIndex]['fecha'],
@@ -33,6 +33,6 @@ with open('Calendar.json', 'r') as f:
            }
     dataArray[dayIndex] = day
 
-with open('Calendar.json', 'w') as f:
+with open('/media/eloy/OS/Users/Eloy/OneDrive/Calendar.json', 'w') as f:
     json.dump(dataArray, f, indent=4, separators=(',', ': '), sort_keys=True, ensure_ascii=False)
 
