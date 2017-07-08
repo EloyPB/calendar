@@ -14,10 +14,12 @@ with open('/media/eloy/OS/Users/Eloy/OneDrive/Calendar.json', 'r') as f:
     lastDate =  datetime.strptime(dataArray[-1]['fecha'], "%Y-%m-%d").date()
     daysMissing = today - lastDate
     if daysMissing.days == 0:
-        print("El día de hoy ya está introducido.")
+        print("\nYa está hecho.\n")
     for i in range(1, daysMissing.days + 1):
         date = lastDate + timedelta(days=i)
         print("Data for", calendar.day_name[date.weekday()], date)
+        print("\n|---|---|---|---|---|---|---|---|---|---|")
+        print("0   1   2   3   4   5   6   7   8   9   10\n")
         
         day = {'fecha' : str(date),
                'nota' : float(input("nota: ")),

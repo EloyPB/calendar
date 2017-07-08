@@ -22,7 +22,8 @@ with open('/media/eloy/OS/Users/Eloy/OneDrive/Calendar.json', 'r') as f:
         diasemana =  diasdelasemana[date.weekday()]
 
         pain = " pain " if day['pain'] else ""
-        print(diasemana, day['fecha'], "", '\x1b[1;32;40m'+str(day['nota'])+'\x1b[0m', pain, day['no-p'], 
+        color = '\x1b[1;32;40m' if day['nota'] >= 5 else '\x1b[1;31;40m'
+        print(diasemana, day['fecha'], "", color+str(day['nota'])+'\x1b[0m', pain, day['no-p'], 
               day['mind'], day['body'], day['exp'], "", day['texto'], "\n")
 
 
