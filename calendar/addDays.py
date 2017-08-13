@@ -17,9 +17,9 @@ with open('/media/eloy/OS/Users/Eloy/OneDrive/Calendar.json', 'r') as f:
         print("\nYa está hecho.\n")
     for i in range(1, daysMissing.days + 1):
         date = lastDate + timedelta(days=i)
-        print("Data for", calendar.day_name[date.weekday()], date)
-        print("\n|---|---|---|---|---|---|---|---|---|---|")
-        print("0   1   2   3   4   5   6   7   8   9   10\n")
+        print("Data for", calendar.day_name[date.weekday()], date, "\n")
+        print("            |---|---|---|---|---|---|---|---|---|---|")
+        print("            0   1   2   3   4   5   6   7   8   9   10\n")
         
         day = {'fecha' : str(date),
                'nota' : float(input("nota: ")),
@@ -27,7 +27,7 @@ with open('/media/eloy/OS/Users/Eloy/OneDrive/Calendar.json', 'r') as f:
                'mind' : int(input("mind: ")),
                'body' : int(input("body: ")),
                'exp' : int(input("exp: ")),
-               'pain' : True if input("pain (y/n): ")=='y' else False,
+               'pain' : True if input("pain (y?): ")=='y' else False,
                'texto' : input("texto: ")
                }
         dataArray.append(day)

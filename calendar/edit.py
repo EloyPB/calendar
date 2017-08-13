@@ -4,16 +4,14 @@ import sys
 import json
 from datetime import datetime, date, timedelta
 
-if len(sys.argv) == 1 or sys.argv[1] in ("today", "0"):
+if len(sys.argv) == 1 or sys.argv[1] == "0":
     dayIndex = -1
 else:
-    if sys.argv[1] == "yesterday":
-        dayIndex = -2
-    elif sys.argv[1][0] == "-":
-        dayIndex = sys.argv[1]
+    if sys.argv[1][0] == "-":
+        dayIndex = int(sys.argv[1])
     else:
         today = date.today()
-        if datetime.now().hour < 7:
+        if datetime.now().hour < 21:
             today -= timedelta(days=1)
         editDate = datetime.strptime(sys.argv[1], "%Y-%m-%d").date()
         dayIndex = (editDate - today).days -1
@@ -21,6 +19,9 @@ else:
 
 with open('/media/eloy/OS/Users/Eloy/OneDrive/Calendar.json', 'r') as f:
     dataArray = json.load(f)
+    
+    print("\n            |---|---|---|---|---|---|---|---|---|---|")
+    print("            0   1   2   3   4   5   6   7   8   9   10\n")
     
     day = {'fecha' : dataArray[dayIndex]['fecha'],
            'nota' : float(input("nota ["+str(dataArray[dayIndex]['nota'])+"] ") or dataArray[dayIndex]['nota']),
