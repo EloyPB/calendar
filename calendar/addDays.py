@@ -27,7 +27,7 @@ with open('/media/eloy/OS/Users/Eloy/OneDrive/Calendar.json', 'r') as f:
                'mind' : int(input("mind: ")),
                'body' : int(input("body: ")),
                'exp' : int(input("exp: ")),
-               'pain' : True if input("pain (y?): ")=='y' else False,
+               'pain' : True if input("pain: ")=='y' else False,
                'texto' : input("texto: ")
                }
         dataArray.append(day)
