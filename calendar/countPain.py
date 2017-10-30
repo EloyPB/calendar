@@ -2,7 +2,7 @@
 
 import json
 
-with open('/media/eloy/OS/Users/Eloy/OneDrive/Calendar.json', 'r') as f:
+with open("/media/eloy/OS/Users/Eloy/OneDrive/Calendar.json", 'r') as f:
 
     dataArray = json.load(f)
     

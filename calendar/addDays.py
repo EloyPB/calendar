@@ -20,13 +20,31 @@ with open('/media/eloy/OS/Users/Eloy/OneDrive/Calendar.json', 'r') as f:
         print("Data for", calendar.day_name[date.weekday()], date, "\n")
         print("            |---|---|---|---|---|---|---|---|---|---|")
         print("            0   1   2   3   4   5   6   7   8   9   10\n")
-        
+
+        while True:
+            try:
+                nota = float(input("nota: "))
+                break
+            except ValueError:
+                print("Give me a number plis")
+
+        pmbe = []
+        pmbeText = ["no-p: ", "mind: ", "body: ", "exp: "]
+        for i in range(4):
+            while True:
+                try:
+                    pmbe.append(int(input(pmbeText[i])))
+                    break
+                except ValueError:
+                    print("Give me a number plis")
+
+
         day = {'fecha' : str(date),
-               'nota' : float(input("nota: ")),
-               'no-p' : int(input("no-p: ")),
-               'mind' : int(input("mind: ")),
-               'body' : int(input("body: ")),
-               'exp' : int(input("exp: ")),
+               'no-p' : pmbe[0],
+               'nota' : nota,
+               'mind' : pmbe[1],
+               'body' : pmbe[2],
+               'exp' : pmbe[3],
                'pain' : True if input("pain: ")=='y' else False,
                'texto' : input("texto: ")
                }
