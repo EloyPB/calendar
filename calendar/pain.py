@@ -21,10 +21,10 @@ for n, day in enumerate(days):
         while count >= len(histogram):
             histogram.append(0)
         if count > 0:
-            histogram[count] += 1
             times.append(n)
             intervals.append(count)
             intervals_counts.append(histogram[count]-1)
+            histogram[count] += 1
         count = 0
     if day['fecha'][5:] == '01-01':
         years.append((n, day['fecha'][:4]))
@@ -85,7 +85,7 @@ while True:
         ticks = []
         labels = []
         for year in years:
-            if year[0] > window_size/2 and year[0] < num_days - window_size/2:
+            if window_size/2 < year[0] < num_days - window_size/2:
                 ticks.append(year[0] - window_size/2)
                 labels.append(year[1])
 
