@@ -23,7 +23,7 @@ for n, day in enumerate(days):
         if count > 0:
             times.append(n)
             intervals.append(count)
-            intervals_counts.append(histogram[count]-1)
+            intervals_counts.append(histogram[count])
             histogram[count] += 1
         count = 0
     if day['fecha'][5:] == '01-01':
