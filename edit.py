@@ -17,7 +17,7 @@ else:
         dayIndex = (editDate - today).days -1
 
 
-with open('/media/eloy/OS/Users/Eloy/OneDrive/Calendar.json', 'r') as f:
+with open('/media/DATA/MEGA/Calendar.json', 'r') as f:
     dataArray = json.load(f)
     
     print("\n            |---|---|---|---|---|---|---|---|---|---|")
@@ -34,6 +34,6 @@ with open('/media/eloy/OS/Users/Eloy/OneDrive/Calendar.json', 'r') as f:
            }
     dataArray[dayIndex] = day
 
-with open('/media/eloy/OS/Users/Eloy/OneDrive/Calendar.json', 'w') as f:
+with open('/media/DATA/MEGA/Calendar.json', 'w') as f:
     json.dump(dataArray, f, indent=4, separators=(',', ': '), sort_keys=True, ensure_ascii=False)
 

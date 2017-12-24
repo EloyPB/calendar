@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import json
 
-with open('/media/eloy/OS/Users/Eloy/OneDrive/Calendar.json', 'r') as f:
+with open('/media/DATA/MEGA/Calendar.json', 'r') as f:
     days = json.load(f)
     num_days = len(days)
 
