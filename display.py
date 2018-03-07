@@ -6,7 +6,7 @@ from datetime import datetime
 
 print("\n\n")
 
-if(len(sys.argv) == 2):
+if len(sys.argv) == 2:
     numDays = int(sys.argv[-1])
 else:
     numDays = 1
