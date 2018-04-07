@@ -125,17 +125,31 @@ while True:
 
         normalized = np.zeros((len(periods), max_length))
 
+        interpolate = False
+
         for period_num, period in enumerate(periods):
             for i in range(max_length):
                 ii = i/(max_length - 1)
                 x = ii*(len(period)-1)
-                normalized[period_num, i] = period[round(x)]
+
+                if interpolate:
+                    x_low = int(x)
+                    x_high = int(x) + 1
+                    low_ratio = x_high - x
+                    high_ratio = x - x_low
+                    x_high = min(x_high, len(period)-1)
+                    normalized[period_num, i] = period[x_low]*low_ratio + period[x_high]*high_ratio
+                else:
+                    normalized[period_num, i] = period[round(x)]
 
         mean = np.mean(normalized, 0)
-        # std = np.std(normalized, 0)
+        std = np.std(normalized, 0)
 
         x_axis = np.linspace(0, 1, max_length)
-        plt.plot(x_axis, mean, '*-')
+        plt.plot(x_axis, mean)
+
+        plt.figure()
+        plt.plot(x_axis, std)
         plt.show()
 
 
