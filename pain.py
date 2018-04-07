@@ -3,6 +3,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import json
+from datetime import datetime, date, timedelta
 
 with open('/media/DATA/MEGA/Calendar.json', 'r') as f:
     days = json.load(f)
@@ -36,7 +37,7 @@ total = sum(histogram)
 print("Higher than ", round(higher_than/total*100, 2), " and lower than ", round(lower_than/total*100, 2))
 
 while True:
-    option = input("\n(q)uit, (h)istogram or (p)ercentiles: ")
+    option = input("\n(q)uit, (h)istogram, (p)ercentiles or (n)ormalized periods: ")
 
     if option == "q":
         exit()
@@ -94,6 +95,52 @@ while True:
 
         ax.set_title("Percentiles in a sliding window of "+ str(window_size) + " days")
         plt.show(block=False)
+
+    elif option == "n":
+        first_date = datetime.strptime(days[0]['fecha'], "%Y-%m-%d").date()
+        start_date = datetime.strptime("2015-08-13", "%Y-%m-%d").date()
+        start_index = (start_date - first_date).days
+
+        found_pain = False
+        index = -1
+        while not found_pain:
+            if days[index]['pain']:
+                found_pain = True
+            else:
+                index -= 1
+        end_index = len(days) + index
+
+        periods = []
+        new_period = []
+        for day in days[start_index:end_index+1]:
+            new_period.append(day['nota'])
+            if day['pain']:
+                periods.append(new_period)
+                new_period = []
+
+        max_length = 0
+        for period in periods:
+            if len(period) > max_length:
+                max_length = len(period)
+
+        normalized = np.zeros((len(periods), max_length))
+
+        for period_num, period in enumerate(periods):
+            for i in range(max_length):
+                ii = i/(max_length - 1)
+                x = ii*(len(period)-1)
+                normalized[period_num, i] = period[round(x)]
+
+        mean = np.mean(normalized, 0)
+        # std = np.std(normalized, 0)
+
+        x_axis = np.linspace(0, 1, max_length)
+        plt.plot(x_axis, mean, '*-')
+        plt.show()
+
+
+
+
 
 
 

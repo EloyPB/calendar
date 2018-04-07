@@ -4,26 +4,25 @@ import sys
 import json
 from datetime import datetime, date, timedelta
 import matplotlib.pyplot as plt
-import matplotlib.ticker as plticker
 import numpy as np
-
-print("\n\n")
 
 with open('/media/DATA/MEGA/Calendar.json', 'r') as f:
     dataArray = json.load(f)
     lastDate = datetime.strptime(dataArray[-1]['fecha'], "%Y-%m-%d").date()
 
     if len(sys.argv) == 1:
-        print("Introduce start date (yyyy-mm-dd) and optionally end date")
-        startIndex = -100
-        endIndex = -1
+        print("Introduce number of last days to plot, or enter initial or initial and final dates as yyyy-mm-dd")
+        quit()
     else:
-        startDate = datetime.strptime(sys.argv[1], "%Y-%m-%d").date()
-        startIndex = (startDate - lastDate).days - 1
-        if len(sys.argv) > 2:
-            endDate = datetime.strptime(sys.argv[2], "%Y-%m-%d").date()
+        endDate = lastDate
+        if "-" in sys.argv[1]:
+            startDate = datetime.strptime(sys.argv[1], "%Y-%m-%d").date()
+            startIndex = (startDate - lastDate).days - 1
+            if len(sys.argv) > 2:
+                endDate = datetime.strptime(sys.argv[2], "%Y-%m-%d").date()
         else:
-            endDate = lastDate
+            startIndex = -int(sys.argv[1])
+
         endIndex = (endDate - lastDate).days - 1
 
     fechas = []
@@ -52,5 +51,3 @@ ax.set_yticks([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
 ax.yaxis.grid()
 plt.tight_layout()
 plt.show()
-
-print("\n\n")
