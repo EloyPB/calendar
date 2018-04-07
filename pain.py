@@ -142,14 +142,18 @@ while True:
                 else:
                     normalized[period_num, i] = period[round(x)]
 
-        mean = np.mean(normalized, 0)
-        std = np.std(normalized, 0)
+        p25 = np.percentile(normalized, 25, axis=0)
+        p50 = np.percentile(normalized, 50, axis=0)
+        p75 = np.percentile(normalized, 75, axis=0)
 
         x_axis = np.linspace(0, 1, max_length)
-        plt.plot(x_axis, mean)
 
-        plt.figure()
-        plt.plot(x_axis, std)
+        fig, ax = plt.subplots()
+        ax.fill_between(x_axis, p25, p75, alpha=0.4)
+        ax.plot(x_axis, p25)
+        ax.plot(x_axis, p50)
+        ax.plot(x_axis, p75)
+
         plt.show()
 
 
