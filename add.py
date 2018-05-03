@@ -4,6 +4,17 @@ import json
 from datetime import datetime, date, timedelta
 import calendar
 
+
+def get_value(key, is_of_type):
+    while True:
+        try:
+            value = is_of_type(input(key))
+            break
+        except ValueError:
+            print("Give me a number")
+    return value
+
+
 today = date.today()
 if datetime.now().hour < 20:
     today -= timedelta(days=1)
@@ -11,10 +22,10 @@ if datetime.now().hour < 20:
 with open('/media/DATA/MEGA/Calendar.json', 'r') as f:
     dataArray = json.load(f)
     
-    lastDate = datetime.strptime(dataArray[-1]['fecha'], "%Y-%m-%d").date()
+    lastDate = datetime.strptime(dataArray[-1]['date'], "%Y-%m-%d").date()
     daysMissing = today - lastDate
     if daysMissing.days == 0:
-        print("\nYa está hecho.\n")
+        print("\nNothing to add\n")
 
     for i in range(1, daysMissing.days + 1):
         date = lastDate + timedelta(days=i)
@@ -22,34 +33,18 @@ with open('/media/DATA/MEGA/Calendar.json', 'r') as f:
         print("            |---|---|---|---|---|---|---|---|---|---|")
         print("            0   1   2   3   4   5   6   7   8   9   10\n")
 
-        while True:
-            try:
-                nota = float(input("nota: "))
-                break
-            except ValueError:
-                print("Give me a number please")
-
-        values = []
-        labels = ["sharp: ", "no-p: ", "me-ex: ", "ph-ex: ", "food: ", "exp: "]
-        for label in labels:
-            while True:
-                try:
-                    values.append(int(input(label)))
-                    break
-                except ValueError:
-                    print("Give me a number please")
-
-        day = {'fecha': str(date),
-               'sharp': values[0],
-               'no-p': values[1],
-               'nota': nota,
-               'me-e': values[2],
-               'ph-e': values[3],
-               'food': values[4],
-               'exp': values[5],
-               'pain': True if input("pain? [n]: ") == 'y' else False,
-               'texto': input("texto: ")
+        day = {'date': str(date),
+               'sat': get_value('sat: ', float),
+               'ph-e': get_value('phys: ', int),
+               'exp': get_value('exp: ', int),
+               'sharp': get_value('sharp: ', int),
+               'food': input('food: '),
                }
+        text = input('text: ')
+        day['pain'] = True if "PAIN" in text else False
+        if text != "":
+            day['text'] = text
+
         dataArray.append(day)
               
 with open('/media/DATA/MEGA/Calendar.json', 'w') as f:

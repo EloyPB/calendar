@@ -25,8 +25,8 @@ else:
         editDate = datetime.strptime(sys.argv[1], "%Y-%m-%d").date()
         dayIndex = (editDate - today).days - 1
 
-formats = {'nota': float, 'sharp': int, 'no-p': int, 'me-e': int, 'ph-e': int, 'food': int, 'exp': int,
-           'mind': int, 'body': int, 'pain': do_nothing, 'pain': y_to_bool, 'texto': do_nothing}
+formats = {'sat': float, 'sharp': int, 'no-p': int, 'me-e': int, 'ph-e': int, 'food': do_nothing, 'exp': int,
+           'mind': int, 'body': int, 'pain': y_to_bool, 'text': do_nothing, 'nourr': int}
 
 print("\n            |---|---|---|---|---|---|---|---|---|---|")
 print("            0   1   2   3   4   5   6   7   8   9   10\n")
@@ -35,7 +35,7 @@ with open('/media/DATA/MEGA/Calendar.json', 'r') as f:
     dataArray = json.load(f)
 
     for key in dataArray[dayIndex]:
-        if key != 'fecha':
+        if key != 'date':
             prompt_string = key + " [" + str(dataArray[dayIndex][key]) + "] "
             dataArray[dayIndex][key] = formats[key](input(prompt_string) or dataArray[dayIndex][key])
 

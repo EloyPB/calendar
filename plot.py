@@ -8,7 +8,7 @@ import numpy as np
 
 with open('/media/DATA/MEGA/Calendar.json', 'r') as f:
     dataArray = json.load(f)
-    lastDate = datetime.strptime(dataArray[-1]['fecha'], "%Y-%m-%d").date()
+    lastDate = datetime.strptime(dataArray[-1]['date'], "%Y-%m-%d").date()
 
     if len(sys.argv) == 1:
         print("Introduce number of last days to plot, or enter initial or initial and final dates as yyyy-mm-dd")
@@ -29,14 +29,16 @@ with open('/media/DATA/MEGA/Calendar.json', 'r') as f:
     notas = []
     notas_pain = []
     for dayIndex in range(startIndex, endIndex + 1):
-        fechas.append(dataArray[dayIndex]['fecha'])
-        notas.append(dataArray[dayIndex]['nota'])
+        fechas.append(dataArray[dayIndex]['date'])
+        notas.append(dataArray[dayIndex]['sat'])
         if dataArray[dayIndex]['pain']:
-            notas_pain.append(dataArray[dayIndex]['nota'])
+            notas_pain.append(dataArray[dayIndex]['sat'])
         else:
             notas_pain.append(-1)
 
 fig, ax = plt.subplots()
+
+print("Mean: ", round(np.average(notas), 2))
 
 ax.plot(fechas, notas, '*-')
 ax.plot(fechas, notas_pain, 'r*')

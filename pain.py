@@ -27,8 +27,8 @@ for n, day in enumerate(days):
             intervals_counts.append(histogram[count])
             histogram[count] += 1
         count = 0
-    if day['fecha'][5:] == '01-01':
-        years.append((n, day['fecha'][:4]))
+    if day['date'][5:] == '01-01':
+        years.append((n, day['date'][:4]))
 
 print("\nCurrent count: {} days".format(count))
 higher_than = sum(histogram[:count])
@@ -77,9 +77,9 @@ while True:
         ax.fill_between(range(p[0].size), p[0], p[4], facecolor='C7', alpha=0.2)
         ax.fill_between(range(p[0].size), p[1], p[3], facecolor='C7', alpha=0.4)
         ax.plot(p[4], 'C7', label='100%', alpha=0.4)
-        ax.plot(p[3], 'C7', label ='75%')
-        ax.plot(p[2], 'k', label ='50%')
-        ax.plot(p[1], 'C7', label ='25%')
+        ax.plot(p[3], 'C7', label='75%')
+        ax.plot(p[2], 'k', label='50%')
+        ax.plot(p[1], 'C7', label='25%')
         ax.plot(p[0], 'C7', label='0%', alpha=0.4)
         ax.legend()
 
@@ -93,11 +93,11 @@ while True:
         ax.set_xticks(ticks)
         ax.set_xticklabels(labels)
 
-        ax.set_title("Percentiles in a sliding window of "+ str(window_size) + " days")
+        ax.set_title("Percentiles in a sliding window of " + str(window_size) + " days")
         plt.show(block=False)
 
     elif option == "n":
-        first_date = datetime.strptime(days[0]['fecha'], "%Y-%m-%d").date()
+        first_date = datetime.strptime(days[0]['date'], "%Y-%m-%d").date()
         start_date = datetime.strptime("2015-08-13", "%Y-%m-%d").date()
         start_index = (start_date - first_date).days
 
@@ -113,7 +113,7 @@ while True:
         periods = []
         new_period = []
         for day in days[start_index:end_index+1]:
-            new_period.append(day['nota'])
+            new_period.append(day['sat'])
             if day['pain']:
                 periods.append(new_period)
                 new_period = []
