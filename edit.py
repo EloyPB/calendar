@@ -5,12 +5,8 @@ import json
 from datetime import datetime, date, timedelta
 
 
-def do_nothing(value):
-    return value
-
-
-def y_to_bool(value):
-    return value == "y"
+def str_to_bool(value):
+    return value == "True"
 
 
 if len(sys.argv) == 1 or sys.argv[1] == "0":
@@ -25,8 +21,8 @@ else:
         editDate = datetime.strptime(sys.argv[1], "%Y-%m-%d").date()
         dayIndex = (editDate - today).days - 1
 
-formats = {'sat': float, 'sharp': int, 'no-p': int, 'me-e': int, 'ph-e': int, 'food': do_nothing, 'exp': int,
-           'mind': int, 'body': int, 'pain': y_to_bool, 'text': do_nothing, 'nourr': int}
+formats = {'sat': float, 'sharp': int, 'no-p': int, 'me-e': int, 'ph-e': int, 'food': str, 'exp': int,
+           'mind': int, 'body': int, 'pain': str_to_bool, 'text': str, 'nourr': int}
 
 print("\n            |---|---|---|---|---|---|---|---|---|---|")
 print("            0   1   2   3   4   5   6   7   8   9   10\n")
@@ -38,6 +34,12 @@ with open('/media/DATA/MEGA/Calendar.json', 'r') as f:
         if key != 'date':
             prompt_string = key + " [" + str(dataArray[dayIndex][key]) + "] "
             dataArray[dayIndex][key] = formats[key](input(prompt_string) or dataArray[dayIndex][key])
+
+    key = input("Something else?: ")
+    if key in formats:
+        dataArray[dayIndex][key] = formats[key](input(key + ": "))
+    elif key != "":
+        print("Key not recognized")
 
 with open('/media/DATA/MEGA/Calendar.json', 'w') as f:
     json.dump(dataArray, f, indent=4, separators=(',', ': '), sort_keys=True, ensure_ascii=False)

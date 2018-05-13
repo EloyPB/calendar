@@ -33,8 +33,14 @@ with open('/media/DATA/MEGA/Calendar.json', 'r') as f:
 
         brown = '\x1b[0;33m'
         for key in day:
-            if key not in ('date', 'pain', 'sat'):
+            if key not in ('date', 'pain', 'sat', 'text', 'food'):
                 string += key + ": " + brown + str(day[key]) + '\x1b[0m' + "  "
+
+        if 'food' in day:
+            string += "\nfood: " + brown + str(day['food']) + '\x1b[0m'
+
+        if 'text' in day:
+            string += "\ntext: " + brown + str(day['text']) + '\x1b[0m'
 
         print(string + "\n")
 
