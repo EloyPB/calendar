@@ -5,10 +5,6 @@ import json
 from datetime import datetime, date, timedelta
 
 
-def str_to_bool(value):
-    return value == "True"
-
-
 if len(sys.argv) == 1 or sys.argv[1] == "0":
     dayIndex = -1
 else:
@@ -22,7 +18,7 @@ else:
         dayIndex = (editDate - today).days - 1
 
 formats = {'sat': float, 'sharp': int, 'no-p': int, 'me-e': int, 'ph-e': int, 'food': str, 'exp': int,
-           'mind': int, 'body': int, 'pain': str_to_bool, 'text': str, 'nourr': int}
+           'mind': int, 'body': int, 'pain': bool, 'text': str, 'nourr': int}
 
 print("\n            |---|---|---|---|---|---|---|---|---|---|")
 print("            0   1   2   3   4   5   6   7   8   9   10\n")
