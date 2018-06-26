@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
 
+import sys
 import json
 import numpy as np
 from scipy.stats.stats import pearsonr
 import matplotlib.pyplot as plt
 import math
 
-np.set_printoptions(threshold=np.nan)
+if len(sys.argv) == 2:
+    correlation_depth = int(sys.argv[-1])
+else:
+    correlation_depth = 5
 
 with open('/media/DATA/MEGA/Calendar.json', 'r') as f:
     data = json.load(f)
@@ -31,8 +35,8 @@ with open('/media/DATA/MEGA/Calendar.json', 'r') as f:
         food_list.append(food_list_unsorted[sorted_index])
         food_counts.append(food_counts_unsorted[sorted_index])
 
-    # for food, count in zip(food_list, food_counts):
-    #     print(food, count)
+    for food, count in zip(food_list, food_counts):
+        print(food, count)
 
     # create matrix
     num_days = len(data) - first_record
@@ -51,7 +55,6 @@ with open('/media/DATA/MEGA/Calendar.json', 'r') as f:
                 mat[day_num, food_num] = 1
 
     # calculate correlations
-    correlation_depth = 5
     sharp_corr = np.zeros((num_foods, correlation_depth))
     sat_corr = np.zeros((num_foods, correlation_depth))
 
