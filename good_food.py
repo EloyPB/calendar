@@ -64,9 +64,9 @@ with open('/media/DATA/MEGA/Calendar.json', 'r') as f:
             sat_corr[food_num, shift] = pearsonr(mat[0:num_days-shift,food_num], sat[shift:])[0]
 
     # plot
-    num_rows = 20
-    num_cols = math.ceil(num_foods/num_rows)
-    sharp_corr = np.pad(sharp_corr, ((0, num_rows*num_cols-num_foods), (0, 0)), 'constant', constant_values=np.nan)
+    num_rows = 25
+    num_cols = min(math.ceil(num_foods/num_rows), 5)
+    sharp_corr = np.pad(sharp_corr, ((0, max(num_rows*num_cols-num_foods, 0)), (0, 0)), 'constant', constant_values=np.nan)
 
     fig, ax = plt.subplots(1, num_cols)
     for col_num in range(num_cols):
@@ -84,7 +84,7 @@ with open('/media/DATA/MEGA/Calendar.json', 'r') as f:
     #     ax[col_num].set_yticks([i for i in range(num_rows)])
     #     ax[col_num].set_yticklabels(food_list[first_index:last_index])
 
-    #fig.colorbar(im, ax=ax.ravel().tolist(), shrink=0.5)
+    # fig.colorbar(im, ax=ax.ravel().tolist(), shrink=0.5)
     plt.show()
 
 

@@ -37,7 +37,7 @@ total = sum(histogram)
 print("Higher than ", round(higher_than/total*100, 2), " and lower than ", round(lower_than/total*100, 2))
 
 while True:
-    option = input("\n(q)uit, (h)istogram, (p)ercentiles or (n)ormalized periods: ")
+    option = input("\n(q)uit, (h)istogram, (p)ercentiles or (s)atisfaction: ")
 
     if option == "q":
         exit()
@@ -96,7 +96,7 @@ while True:
         ax.set_title("Percentiles in a sliding window of " + str(window_size) + " days")
         plt.show(block=False)
 
-    elif option == "n":
+    elif option == "s":        
         first_date = datetime.strptime(days[0]['date'], "%Y-%m-%d").date()
         start_date = datetime.strptime("2015-08-13", "%Y-%m-%d").date()
         start_index = (start_date - first_date).days
@@ -123,28 +123,17 @@ while True:
             if len(period) > max_length:
                 max_length = len(period)
 
-        normalized = np.zeros((len(periods), max_length))
-
-        interpolate = False
+        mat_normalized = np.zeros((len(periods), max_length))
 
         for period_num, period in enumerate(periods):
             for i in range(max_length):
                 ii = i/(max_length - 1)
                 x = ii*(len(period)-1)
+                mat_normalized[period_num, i] = period[round(x)]
 
-                if interpolate:
-                    x_low = int(x)
-                    x_high = int(x) + 1
-                    low_ratio = x_high - x
-                    high_ratio = x - x_low
-                    x_high = min(x_high, len(period)-1)
-                    normalized[period_num, i] = period[x_low]*low_ratio + period[x_high]*high_ratio
-                else:
-                    normalized[period_num, i] = period[round(x)]
-
-        p25 = np.percentile(normalized, 25, axis=0)
-        p50 = np.percentile(normalized, 50, axis=0)
-        p75 = np.percentile(normalized, 75, axis=0)
+        p25 = np.percentile(mat_normalized, 25, axis=0)
+        p50 = np.percentile(mat_normalized, 50, axis=0)
+        p75 = np.percentile(mat_normalized, 75, axis=0)
 
         x_axis = np.linspace(0, 1, max_length)
 
@@ -153,6 +142,20 @@ while True:
         ax.plot(x_axis, p25)
         ax.plot(x_axis, p50)
         ax.plot(x_axis, p75)
+
+        mat = np.zeros((len(periods), max_length))
+        mask = np.ones((len(periods), max_length))
+        fig, ax = plt.subplots()
+        for period_num, period in enumerate(periods):
+            ax.plot(period, color='gray', marker='.', linestyle='none')
+            for day_num, sat in enumerate(period):
+                mat[period_num, day_num] = sat
+                mask[period_num, day_num] = 0
+        masked_array = np.ma.masked_array(mat, mask)
+        average = np.mean(masked_array, axis=0)
+        ax.plot(average, 'b')
+        ax.set_ylim([2, 8])
+        ax.grid()
 
         plt.show()
 
