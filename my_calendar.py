@@ -1,7 +1,11 @@
 import json
-from pydoc import locate
-from datetime import date, datetime, timedelta
 import calendar
+import tempfile, os
+import numpy as np
+import matplotlib.pyplot as plt
+from pydoc import locate
+from subprocess import call
+from datetime import date, datetime, timedelta
 
 
 def get_value(field, cast_type):
@@ -20,17 +24,18 @@ class Calendar:
             lines = [line.rstrip('\n') for line in f]
 
         self.path = lines[0]
-        self.fields = []
         self.explicit_fields = []
         self.explicit_types = []
         self.implicit_fields = []
+        self.implicit_sources = []
+        self.implicit_keys = []
 
         for line in lines[1:]:
-            words = line.split(', ')
-            self.fields.append(words[0])
+            words = line.split()
             if words[1] == 'implicit':
-                self.implicit_fields.append({'field': words[0], 'source': words[2].split(':')[0],
-                                             'key': words[2].split(':')[1]})
+                self.implicit_fields.append(words[0])
+                self.implicit_sources.append(words[2].split(':')[0])
+                self.implicit_keys.append(words[2].split(':')[1])
             else:
                 self.explicit_fields.append(words[0])
                 self.explicit_types.append(locate(words[1]))
@@ -40,7 +45,30 @@ class Calendar:
 
     def dump(self):
         with open(self.path, 'w') as f:
-            json.dump(self.database, f, indent=4, separators=(',', ': '), sort_keys=True, ensure_ascii=False)
+            json.dump(self.database, f, indent=4, separators=(',', ': '), ensure_ascii=False)
+
+    def reorder(self):
+        """Reorder database in the following way:
+        1 - explicit fields mentioned in config file
+        2 - implicit fields mentioned in config file
+        3 - fields not mentioned in config file"""
+
+        new_database = []
+        for day in self.database:
+            new_day = {'date': day['date']}
+            for field in self.explicit_fields:
+                if field in day:
+                    new_day[field] = day[field]
+            for field in self.implicit_fields:
+                if field in day:
+                    new_day[field] = day[field]
+            for field in day:
+                if field not in self.explicit_fields and field not in self.implicit_fields:
+                    new_day[field] = day[field]
+            new_database.append(new_day)
+
+        self.database = new_database
+        self.dump()
 
     def add_days(self):
         print("\n")
@@ -68,8 +96,8 @@ class Calendar:
             for field_num, field in enumerate(self.explicit_fields):
                 value = get_value(field, self.explicit_types[field_num])
                 day[field] = value
-            for implicit_field in self.implicit_fields:
-                day[implicit_field['field']] = implicit_field['key'] in day[implicit_field['source']]
+            for field_num, implicit_field in enumerate(self.implicit_fields):
+                day[implicit_field] = self.implicit_keys[field_num] in day[self.implicit_sources[field_num]]
 
             self.database.append(day)
 
@@ -85,12 +113,27 @@ class Calendar:
         else:
             print("Date out of range")
 
-    def display(self, num_days=None, first_date=None, last_date=None):
-        print("\n")
+    def edit(self, edit_date=None):
+        if edit_date is not None:
+            edit_index = self.date_to_index(edit_date)
+        else:
+            edit_index = -1
 
-        week_days = ["Monday    ", "Tuesday   ", "Wednesday ", "Thursday  ",
-                     "Friday    ", "Saturday  ", "Sunday    "]
+        day = json.dumps(self.database[edit_index], indent=4, separators=(',', ': '), ensure_ascii=False)
 
+        with tempfile.NamedTemporaryFile(suffix=".tmp") as tf:
+            tf.write(bytes(day, 'utf-8'))
+            tf.flush()
+            editor = os.environ.get('EDITOR', 'vim')
+            call([editor, tf.name])
+
+            tf.seek(0)
+            edited_day = json.loads(tf.read())
+            self.database[edit_index] = edited_day
+
+        self.dump()
+
+    def index_range(self, num_days=None, first_date=None, last_date=None):
         if num_days is not None:
             first_index = -num_days
             last_index = 0
@@ -100,6 +143,19 @@ class Calendar:
                 last_index = self.date_to_index(last_date) + 1
             else:
                 last_index = len(self.database)
+        return first_index, last_index
+
+    def display(self, num_days=None, first_date=None, last_date=None):
+        print("\n")
+
+        week_days = ["Monday    ", "Tuesday   ", "Wednesday ", "Thursday  ",
+                     "Friday    ", "Saturday  ", "Sunday    "]
+
+        brown = '\033[38;5;180m'
+        blue = '\033[38;5;153m'
+        reset = '\033[0m'
+
+        first_index, last_index = self.index_range(num_days, first_date, last_date)
 
         for day_index in range(first_index, last_index):
             day = self.database[day_index]
@@ -107,15 +163,56 @@ class Calendar:
             week_day = week_days[processing_date.weekday()]
 
             string = week_day + day['date'] + "  "
-            for field in self.fields:
+            for field in self.explicit_fields:
                 if field in day:
                     value = day[field]
                     if type(value) is str:
-                        string += '\n'
-                    string += field + ': ' + str(value) + ' '
+                        # print strings in light brown, with implicit field keywords in light blue
+                        string += '\n' + field + ': '
+                        words = value.split()
+                        for word in words:
+                            if word in self.implicit_keys:
+                                string += blue + word + reset + ' '
+                            else:
+                                string += brown + word + reset + ' '
+                    elif type(value) is int or type(value) is float:
+                        # print numbers following color gradient from 0:white to 10:green
+                        rb = str(int((10 - value) * 25.5))
+                        color = '\033[38;2;' + rb + ';255;' + rb + 'm'
+                        string += field + ': ' + color + str(value) + reset + ' '
 
             print(string + '\n')
 
         print("\n")
 
+    def plot(self, num_days=None, first_date=None, last_date=None):
+        first_index, last_index = self.index_range(num_days, first_date, last_date)
+        try:
+            with open('plots.txt') as f:
+                plots = json.load(f)
 
+                for plot in plots:
+                    fig, ax = plt.subplots()
+                    ax.set_ylim(0, 10)
+                    ax.set_yticks([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+                    ax.yaxis.grid()
+                    for plot_dict in plot:
+                        if plot_dict['type'] == 'bool':
+                            events = []
+                            for day_num, day_index in enumerate(range(first_index, last_index)):
+                                if plot_dict['field'] in self.database[day_index]:
+                                    if self.database[day_index][plot_dict['field']]:
+                                        events.append(day_num)
+                            ax.eventplot(events, colors=plot_dict['color'], linelengths=20)
+                        else:
+                            values = []
+                            for day_index in range(first_index, last_index):
+                                if plot_dict['field'] in self.database[day_index]:
+                                    values.append(self.database[day_index][plot_dict['field']])
+                                else:
+                                    values.append(-1)
+                            ax.plot(values, '*-', color=plot_dict['color'])
+                plt.show()
+
+        except FileNotFoundError:
+            print("Run config_plots.py")
