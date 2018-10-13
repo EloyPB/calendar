@@ -1,6 +1,7 @@
+import os
 import json
 import calendar
-import tempfile, os
+import tempfile
 import numpy as np
 import matplotlib.pyplot as plt
 from pydoc import locate
@@ -20,8 +21,19 @@ def get_value(field, cast_type):
 
 class Calendar:
     def __init__(self):
-        with open('config.txt') as f:
-            lines = [line.rstrip('\n') for line in f]
+        try:
+            with open('config.txt') as f:
+                lines = [line.rstrip('\n') for line in f]
+        except FileNotFoundError:
+            print("\nConfiguration file not found. \nPlease create a file named 'config.txt' in this directory."
+                  "\nThe first line must contain the path to the file where the data will be saved, "
+                  "including the desired file name with .json extension."
+                  "\nIn subsequent lines declare the fields to be recorded. Each line must consist of a type "
+                  "(int, float, bool, str) followed by a space and the name of the field. "
+                  "\nIt is also possible to add implicit boolean fields "
+                  "which will take a value of True if a keyword is mentioned in the string of another field. "
+                  "\nFor implicit fields, the lines should look like: 'field_name implicit source_field:keyword'\n")
+            exit()
 
         self.path = lines[0]
         self.explicit_fields = []
@@ -40,8 +52,13 @@ class Calendar:
                 self.explicit_types.append(locate(words[0]))
                 self.explicit_fields.append(words[1])
 
-        with open(self.path, 'r') as f:
-            self.database = json.load(f)
+        try:
+            with open(self.path, 'r') as f:
+                self.database = json.load(f)
+        except FileNotFoundError:
+            print('Database not found, creating a new one...')
+            self.database = []
+            self.dump()
 
     def dump(self):
         with open(self.path, 'w') as f:
@@ -78,8 +95,12 @@ class Calendar:
             date_today -= timedelta(days=1)
 
         # calculate how many days are missing
-        last_date = datetime.strptime(self.database[-1]['date'], "%Y-%m-%d").date()
+        if len(self.database) > 0:
+            last_date = datetime.strptime(self.database[-1]['date'], "%Y-%m-%d").date()
+        else:
+            last_date = date_today - timedelta(days=1)
         days_missing = (date_today - last_date).days
+
         if days_missing == 0:
             print("\nAlready up to date\n")
 
@@ -106,7 +127,6 @@ class Calendar:
 
     def date_to_index(self, processing_date):
         first_date = datetime.strptime(self.database[0]['date'], "%Y-%m-%d").date()
-        print(first_date)
         processing_date = datetime.strptime(processing_date, "%Y-%m-%d").date()
         last_date = datetime.strptime(self.database[-1]['date'], "%Y-%m-%d").date()
         if first_date <= processing_date <= last_date:
@@ -188,7 +208,6 @@ class Calendar:
 
     def plot(self, num_days=None, first_date=None, last_date=None):
         first_index, last_index = self.index_range(num_days, first_date, last_date)
-        print(first_index, last_index)
         num_days = last_index - first_index
 
         # prepare dates for x tick labels
