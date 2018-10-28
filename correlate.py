@@ -4,4 +4,4 @@ from my_calendar import Calendar
 
 
 calendar = Calendar()
-calendar.display()
+calendar.correlate()

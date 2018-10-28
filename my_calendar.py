@@ -1,11 +1,14 @@
 import os
 import json
 import calendar
+import argparse
 import tempfile
+import math
 import numpy as np
 import matplotlib.pyplot as plt
 from pydoc import locate
 from subprocess import call
+from scipy.stats.stats import pearsonr
 from datetime import date, datetime, timedelta
 
 
@@ -36,21 +39,18 @@ class Calendar:
             exit()
 
         self.path = lines[0]
-        self.explicit_fields = []
-        self.explicit_types = []
-        self.implicit_fields = []
-        self.implicit_sources = []
-        self.implicit_keys = []
+        self.fields = []
+        self.types = []
+        self.implicit_sources = {}
+        self.implicit_keywords = {}
 
         for line in lines[1:]:
             words = line.split()
-            if words[0] == 'implicit':
-                self.implicit_fields.append(words[1])
-                self.implicit_sources.append(words[2].split(':')[0])
-                self.implicit_keys.append(words[2].split(':')[1])
-            else:
-                self.explicit_types.append(locate(words[0]))
-                self.explicit_fields.append(words[1])
+            self.types.append(locate(words[0]))
+            self.fields.append(words[1])
+            if len(words) > 2:
+                self.implicit_sources[words[1]] = words[2].split(':')[0]
+                self.implicit_keywords[words[1]] = words[2].split(':')[1]
 
         try:
             with open(self.path, 'r') as f:
@@ -65,22 +65,16 @@ class Calendar:
             json.dump(self.database, f, indent=4, separators=(',', ': '), ensure_ascii=False)
 
     def reorder(self):
-        """Reorder database in the following way:
-        1 - explicit fields mentioned in config file
-        2 - implicit fields mentioned in config file
-        3 - fields not mentioned in config file"""
+        """Reorder database according to config file"""
 
         new_database = []
         for day in self.database:
             new_day = {'date': day['date']}
-            for field in self.explicit_fields:
-                if field in day:
-                    new_day[field] = day[field]
-            for field in self.implicit_fields:
+            for field in self.fields:
                 if field in day:
                     new_day[field] = day[field]
             for field in day:
-                if field not in self.explicit_fields and field not in self.implicit_fields:
+                if field not in self.fields:
                     new_day[field] = day[field]
             new_database.append(new_day)
 
@@ -109,17 +103,17 @@ class Calendar:
             processing_date = last_date + timedelta(days=i)
             print("Data for", calendar.day_name[processing_date.weekday()], processing_date, "\n")
             # if any of the fields expects a number, print a scale from 0 to 10 as a visual aid
-            if int in self.explicit_types or float in self.explicit_types:
+            if int in self.types or float in self.types:
                 print("            |---|---|---|---|---|---|---|---|---|---|")
                 print("            0   1   2   3   4   5   6   7   8   9   10\n")
 
             day = {'date': str(processing_date)}
-            for field_num, field in enumerate(self.explicit_fields):
-                value = get_value(field, self.explicit_types[field_num])
+            for field, field_type in zip(self.fields, self.types):
+                if field in self.implicit_keywords:
+                    value = self.implicit_keywords[field] in day[self.implicit_sources[field]]
+                else:
+                    value = get_value(field, field_type)
                 day[field] = value
-            for field_num, implicit_field in enumerate(self.implicit_fields):
-                day[implicit_field] = self.implicit_keys[field_num] in day[self.implicit_sources[field_num]]
-
             self.database.append(day)
 
         self.dump()
@@ -134,40 +128,49 @@ class Calendar:
         else:
             print("Date out of range")
 
-    def edit(self, edit_date=None):
-        if edit_date is not None:
-            edit_index = self.date_to_index(edit_date)
+    def edit(self):
+        parser = argparse.ArgumentParser()
+        parser.add_argument("-d", "--date", help="date to edit")
+        args = parser.parse_args()
+
+        if args.date is not None:
+            edit_index = self.date_to_index(args.date)
         else:
             edit_index = -1
 
         day = json.dumps(self.database[edit_index], indent=4, separators=(',', ': '), ensure_ascii=False)
 
         with tempfile.NamedTemporaryFile(suffix=".tmp") as tf:
+            if int in self.types or float in self.types:
+                tf.write(bytes("            |---|---|---|---|---|---|---|---|---|---|\n", 'utf-8'))
+                tf.write(bytes("            0   1   2   3   4   5   6   7   8   9   10\n\n", 'utf-8'))
             tf.write(bytes(day, 'utf-8'))
             tf.flush()
             editor = os.environ.get('EDITOR', 'vim')
             call([editor, tf.name])
 
-            tf.seek(0)
+            tf.seek(110)
             edited_day = json.loads(tf.read())
             self.database[edit_index] = edited_day
 
         self.dump()
 
-    def index_range(self, num_days=None, first_date=None, last_date=None):
-        if num_days is not None:
+    def index_range(self, num_days, first_date=None):
+        if first_date is not None:
+            first_index = self.date_to_index(first_date)
+            last_index = min(first_index + num_days, len(self.database))
+        else:
             first_index = -num_days
             last_index = 0
-        else:
-            first_index = self.date_to_index(first_date)
-            if last_date is not None:
-                last_index = self.date_to_index(last_date) + 1
-            else:
-                last_index = len(self.database)
         return first_index, last_index
 
-    def display(self, num_days=None, first_date=None, last_date=None):
+    def display(self):
         print("\n")
+
+        parser = argparse.ArgumentParser()
+        parser.add_argument("num_days", type=int, help="number of days to display")
+        parser.add_argument("-d", "--date", help="first date to display")
+        args = parser.parse_args()
 
         week_days = ["Monday    ", "Tuesday   ", "Wednesday ", "Thursday  ",
                      "Friday    ", "Saturday  ", "Sunday    "]
@@ -176,7 +179,7 @@ class Calendar:
         blue = '\033[38;5;153m'
         reset = '\033[0m'
 
-        first_index, last_index = self.index_range(num_days, first_date, last_date)
+        first_index, last_index = self.index_range(args.num_days, args.date)
 
         for day_index in range(first_index, last_index):
             day = self.database[day_index]
@@ -184,15 +187,15 @@ class Calendar:
             week_day = week_days[processing_date.weekday()]
 
             string = week_day + day['date'] + "  "
-            for field in self.explicit_fields:
-                if field in day:
+            for field in self.fields:
+                if field in day and field not in self.implicit_keywords:
                     value = day[field]
                     if type(value) is str:
                         # print strings in light brown, with implicit field keywords in light blue
                         string += '\n' + field + ': '
                         words = value.split()
                         for word in words:
-                            if word in self.implicit_keys:
+                            if word in self.implicit_keywords.values():
                                 string += blue + word + reset + ' '
                             else:
                                 string += brown + word + reset + ' '
@@ -206,196 +209,132 @@ class Calendar:
 
         print("\n")
 
-    def plot(self, num_days=None, first_date=None, last_date=None):
-        first_index, last_index = self.index_range(num_days, first_date, last_date)
+    def plot(self):
+        parser = argparse.ArgumentParser()
+        parser.add_argument("fields", help="fields to plot separated by commas (without empty spaces)")
+        parser.add_argument("num_days", type=int, help="number of days to plot")
+        parser.add_argument("-d", "--date", help="first date to plot")
+        args = parser.parse_args()
+
+        first_index, last_index = self.index_range(args.num_days, args.date)
         num_days = last_index - first_index
 
         # prepare dates for x tick labels
         first_date = datetime.strptime(self.database[first_index]['date'], "%Y-%m-%d").date()
         dates = [first_date + timedelta(days=n) for n in range(num_days)]
 
-        try:
-            with open('plots.txt') as f:
-                plots = json.load(f)
+        fig, ax = plt.subplots()
+        ax.set_ylim(0, 10)
+        ax.set_yticks([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+        ax.yaxis.grid()
+        prop_cycle = plt.rcParams['axes.prop_cycle']
+        colors = prop_cycle.by_key()['color']
 
-                for plot in plots:
-                    fig, ax = plt.subplots()
-                    ax.set_ylim(0, 10)
-                    ax.set_yticks([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
-                    ax.yaxis.grid()
-                    for plot_dict in plot:
-                        if plot_dict['type'] == 'bool':
-                            events = []
-                            for day_num, day_index in enumerate(range(first_index, last_index)):
-                                if plot_dict['field'] in self.database[day_index]:
-                                    if self.database[day_index][plot_dict['field']]:
-                                        events.append(datetime.strptime(self.database[day_index]['date'], "%Y-%m-%d").date())
-                            ax.eventplot(events, colors=plot_dict['color'], linelengths=20)
-                        else:
-                            values = np.zeros(num_days)
-                            for day_num, day_index in enumerate(range(first_index, last_index)):
-                                if plot_dict['field'] in self.database[day_index]:
-                                    values[day_num] = self.database[day_index][plot_dict['field']]
-                                else:
-                                    values[day_num] = -1
-                            masked_values = np.ma.masked_where(values < 0, values)
-                            ax.plot(dates, masked_values, '*-', color=plot_dict['color'])
-                plt.show()
+        fields = args.fields.split(',')
+        for plot_num, field in enumerate(fields):
+            field_num = self.fields.index(field)
+            color = colors[plot_num % len(colors)]
+            if self.types[field_num] is bool:
+                events = []
+                for day_num, day_index in enumerate(range(first_index, last_index)):
+                    if field in self.database[day_index] and self.database[day_index][field] == True:
+                        events.append(datetime.strptime(self.database[day_index]['date'], "%Y-%m-%d").date())
+                ax.eventplot(events, linelengths=20, label=field, color=color)
 
-        except FileNotFoundError:
-            print("Run config_plots.py")
-
-    def events(self, field):
-        num_days = len(self.database)
-
-        count = -2
-        times = []  # when the event is true
-        intervals = []  # all of the intervals
-        intervals_counts = []  # number of times the interval has occurred
-        histogram = []  # sorted intervals with their number of occurrences
-        years = []
-
-        for n, day in enumerate(self.database):
-            count += 1
-            if day[field]:
-                while count >= len(histogram):
-                    histogram.append(0)
-                if count > 0:
-                    times.append(n)
-                    intervals.append(count)
-                    intervals_counts.append(histogram[count])
-                    histogram[count] += 1
-                count = 0
-            if day['date'][5:] == '01-01':
-                years.append((n, day['date'][:4]))
-
-        print("\nCurrent count: {} days".format(count))
-        higher_than = sum(histogram[:count])
-        lower_than = sum(histogram[count + 1:])
-        total = sum(histogram)
-        print("Higher than ", round(higher_than / total * 100, 2), " and lower than ",
-              round(lower_than / total * 100, 2))
-
-        while True:
-            option = input("\n(q)uit, (h)istogram, (p)ercentiles or (c)orrelation: ")
-
-            if option == "q":
-                exit()
-
-            elif option == "h":
-                colors = np.zeros((max(histogram), len(histogram)))
-
-                for n, time in enumerate(times):
-                    colors[intervals_counts[n], intervals[n]] = time / num_days
-                masked_colors = np.ma.masked_equal(colors, 0)
-
-                fig, ax = plt.subplots()
-                pc = ax.pcolormesh(masked_colors)
-                cbar = fig.colorbar(pc, ticks=np.linspace(years[0][0] / num_days, years[-1][0] / num_days, len(years)))
-                cbar.ax.set_yticklabels([year[1] for year in years])
-                plt.show(block=False)
-
-            elif option == "p":
-                while True:
-                    try:
-                        window_size = int(input("Enter the size of the sliding window in days: [365] ") or 365)
-                        break
-                    except ValueError:
-                        print("Give me a number")
-
-                times = np.array(times)
-                intervals = np.array(intervals)
-                percentiles = [0, 25, 50, 75, 100]
-                p = np.zeros((len(percentiles), num_days - window_size))
-
-                for start in range(0, num_days - window_size):
-                    window = intervals[(times >= start) & (times <= start + window_size)]
-                    for i, percentile in enumerate(percentiles):
-                        p[i, start] = np.percentile(window, percentile)
-
-                fig, ax = plt.subplots(1)
-                ax.fill_between(range(p[0].size), p[0], p[4], facecolor='C7', alpha=0.2)
-                ax.fill_between(range(p[0].size), p[1], p[3], facecolor='C7', alpha=0.4)
-                ax.plot(p[4], 'C7', label='100%', alpha=0.4)
-                ax.plot(p[3], 'C7', label='75%')
-                ax.plot(p[2], 'k', label='50%')
-                ax.plot(p[1], 'C7', label='25%')
-                ax.plot(p[0], 'C7', label='0%', alpha=0.4)
-                ax.legend()
-
-                ticks = []
-                labels = []
-                for year in years:
-                    if window_size / 2 < year[0] < num_days - window_size / 2:
-                        ticks.append(year[0] - window_size / 2)
-                        labels.append(year[1])
-
-                ax.set_xticks(ticks)
-                ax.set_xticklabels(labels)
-
-                ax.set_title("Percentiles in a sliding window of " + str(window_size) + " days")
-                plt.show(block=False)
-
-            elif option == "c":
-                correlated_field = input('Field to correlate: ')
-                first_date = datetime.strptime(self.database[0]['date'], "%Y-%m-%d").date()
-                start_date = datetime.strptime("2018-04-07", "%Y-%m-%d").date()
-                start_index = (start_date - first_date).days
-
-                found_pain = False
-                index = -1
-                while not found_pain:
-                    if self.database[index]['pain']:
-                        found_pain = True
+            elif self.types[field_num] in (int, float):
+                values = np.zeros(num_days)
+                for day_num, day_index in enumerate(range(first_index, last_index)):
+                    if field in self.database[day_index]:
+                        values[day_num] = self.database[day_index][field]
                     else:
-                        index -= 1
-                end_index = len(self.database) + index
+                        values[day_num] = -1
+                masked_values = np.ma.masked_where(values < 0, values)
+                ax.plot(dates, masked_values, '.-', label=field, color=color)
+        ax.legend()
+        plt.show()
 
-                periods = []
-                new_period = []
-                for day in self.database[start_index:end_index + 1]:
-                    new_period.append(day[correlated_field])
-                    if day['pain']:
-                        periods.append(new_period)
-                        new_period = []
+    def correlate(self):
+        np.seterr(all='ignore')
 
-                max_length = 0
-                for period in periods:
-                    if len(period) > max_length:
-                        max_length = len(period)
+        parser = argparse.ArgumentParser()
+        parser.add_argument("factors_field", help="field containing lists of factors")
+        parser.add_argument("values_field", help="field with values to correlate")
+        parser.add_argument("-w", "--window", help="window size", default=5)
+        args = parser.parse_args()
 
-                mat_normalized = np.zeros((len(periods), max_length))
+        # find indices of the last uninterrupted stream of data
+        found_stream = False
+        for day_index in range(-1, -len(self.database)-1, -1):
+            if not found_stream:
+                if args.factors_field in self.database[day_index] and args.values_field in self.database[day_index]:
+                    last_index = day_index
+                    found_stream = True
+            else:
+                if (day_index == -len(self.database) or args.factors_field not in self.database[day_index]
+                        or args.values_field not in self.database[day_index]):
+                    first_index = day_index + 1
+                    break
 
-                for period_num, period in enumerate(periods):
-                    for i in range(max_length):
-                        ii = i / (max_length - 1)
-                        x = ii * (len(period) - 1)
-                        mat_normalized[period_num, i] = period[round(x)]
+        # get the list of factors and how many times each of them appears
+        unsorted_factor_list = []
+        unsorted_factor_counts = []
+        for day_index in range(first_index, last_index+1, 1):
+            day = self.database[day_index]
+            for factor in day[args.factors_field].split(', '):
+                if factor in unsorted_factor_list:
+                    unsorted_factor_counts[unsorted_factor_list.index(factor)] += 1
+                else:
+                    unsorted_factor_list.append(factor)
+                    unsorted_factor_counts.append(1)
 
-                p25 = np.percentile(mat_normalized, 25, axis=0)
-                p50 = np.percentile(mat_normalized, 50, axis=0)
-                p75 = np.percentile(mat_normalized, 75, axis=0)
+        num_days = -(first_index - last_index - 1)
+        print('\nAnalysis based on %d days\n' % num_days)
 
-                x_axis = np.linspace(0, 1, max_length)
+        # sort factors by frequency
+        factor_list = []
+        factor_counts = []
+        sorted_indices = np.flip(np.argsort(unsorted_factor_counts), 0)
+        for sorted_index in sorted_indices:
+            factor_list.append(unsorted_factor_list[sorted_index])
+            factor_counts.append(unsorted_factor_counts[sorted_index])
 
-                fig, ax = plt.subplots()
-                ax.fill_between(x_axis, p25, p75, alpha=0.4)
-                ax.plot(x_axis, p25)
-                ax.plot(x_axis, p50)
-                ax.plot(x_axis, p75)
+        # print sorted list
+        for factor, count in zip(factor_list, factor_counts):
+            print(count, factor)
+        print('\n')
 
-                mat = np.zeros((len(periods), max_length))
-                mask = np.ones((len(periods), max_length))
-                fig, ax = plt.subplots()
-                for period_num, period in enumerate(periods):
-                    ax.plot(period, color='gray', marker='.', linestyle='none')
-                    for day_num, sat in enumerate(period):
-                        mat[period_num, day_num] = sat
-                        mask[period_num, day_num] = 0
-                masked_array = np.ma.masked_array(mat, mask)
-                average = np.mean(masked_array, axis=0)
-                ax.plot(average, 'b')
-                ax.set_ylim([0, 10])
-                ax.grid()
+        # create matrix
+        num_factors = len(factor_list)
+        mat = np.zeros((num_days, num_factors))
+        values = np.zeros(num_days)
 
-                plt.show()
+        for day_num, day_index in enumerate(range(first_index, last_index+1, 1)):
+            day = self.database[day_index]
+            values[day_num] = day[args.values_field]
+
+            for factor_num, factor in enumerate(factor_list):
+                if factor in day[args.factors_field].split(", "):
+                    mat[day_num, factor_num] = 1
+
+        # calculate correlations
+        corr = np.zeros((num_factors, args.window))
+
+        for factor_num in range(num_factors):
+            for time_shift in range(0, args.window):
+                corr[factor_num, time_shift] = pearsonr(mat[0:num_days - time_shift, factor_num], values[time_shift:])[0]
+
+        # plot
+        num_rows = 25
+        num_cols = min(math.ceil(num_factors / num_rows), 5)
+        sharp_corr = np.pad(corr, ((0, max(num_rows * num_cols - num_factors, 0)), (0, 0)), 'constant',
+                            constant_values=np.nan)
+
+        fig, ax = plt.subplots(1, num_cols)
+        for col_num in range(num_cols):
+            first_index = col_num * num_rows
+            last_index = (col_num + 1) * num_rows
+            ax[col_num].matshow(sharp_corr[first_index:last_index], vmin=-1, vmax=1)
+            ax[col_num].set_yticks([i for i in range(num_rows)])
+            ax[col_num].set_yticklabels(factor_list[first_index:last_index])
+
+        plt.show()
