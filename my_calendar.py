@@ -211,7 +211,7 @@ class Calendar:
 
     def plot(self):
         parser = argparse.ArgumentParser()
-        parser.add_argument("fields", help="fields to plot separated by commas (without empty spaces)")
+        parser.add_argument("fields", help="fields to plot separated by commas (without spaces)")
         parser.add_argument("num_days", type=int, help="number of days to plot")
         parser.add_argument("-d", "--date", help="first date to plot")
         args = parser.parse_args()
@@ -259,7 +259,7 @@ class Calendar:
         parser = argparse.ArgumentParser()
         parser.add_argument("factors_field", help="field containing lists of factors")
         parser.add_argument("values_field", help="field with values to correlate")
-        parser.add_argument("-w", "--window", help="window size", default=5)
+        parser.add_argument("-w", "--window", help="window size", default=5, type=int)
         args = parser.parse_args()
 
         # find indices of the last uninterrupted stream of data
@@ -291,12 +291,8 @@ class Calendar:
         print('\nAnalysis based on %d days\n' % num_days)
 
         # sort factors by frequency
-        factor_list = []
-        factor_counts = []
-        sorted_indices = np.flip(np.argsort(unsorted_factor_counts), 0)
-        for sorted_index in sorted_indices:
-            factor_list.append(unsorted_factor_list[sorted_index])
-            factor_counts.append(unsorted_factor_counts[sorted_index])
+        factor_counts = sorted(unsorted_factor_counts, reverse=True)
+        factor_list = sorted(unsorted_factor_list, reverse=True, key=lambda f: unsorted_factor_counts[unsorted_factor_list.index(f)])
 
         # print sorted list
         for factor, count in zip(factor_list, factor_counts):
