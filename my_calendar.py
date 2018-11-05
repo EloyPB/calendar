@@ -81,6 +81,16 @@ class Calendar:
         self.database = new_database
         self.dump()
 
+    def fill_implicit_fields(self, day):
+        for field, keyword in self.implicit_keywords.items():
+            day[field] = keyword in day[self.implicit_sources[field]]
+
+    @staticmethod
+    def visual_aid():
+        string = "            |---|---|---|---|---|---|---|---|---|---|\n"
+        string += "            0   1   2   3   4   5   6   7   8   9   10\n"
+        return string
+
     def add_days(self):
         print("\n")
         # find out current date, if it is before 20:00 the current day does not count
@@ -104,16 +114,14 @@ class Calendar:
             print("Data for", calendar.day_name[processing_date.weekday()], processing_date, "\n")
             # if any of the fields expects a number, print a scale from 0 to 10 as a visual aid
             if int in self.types or float in self.types:
-                print("            |---|---|---|---|---|---|---|---|---|---|")
-                print("            0   1   2   3   4   5   6   7   8   9   10\n")
+                print(self.visual_aid())
 
             day = {'date': str(processing_date)}
             for field, field_type in zip(self.fields, self.types):
-                if field in self.implicit_keywords:
-                    value = self.implicit_keywords[field] in day[self.implicit_sources[field]]
-                else:
+                if field not in self.implicit_keywords:
                     value = get_value(field, field_type)
-                day[field] = value
+                    day[field] = value
+            self.fill_implicit_fields(day)
             self.database.append(day)
 
         self.dump()
@@ -142,15 +150,16 @@ class Calendar:
 
         with tempfile.NamedTemporaryFile(suffix=".tmp") as tf:
             if int in self.types or float in self.types:
-                tf.write(bytes("            |---|---|---|---|---|---|---|---|---|---|\n", 'utf-8'))
-                tf.write(bytes("            0   1   2   3   4   5   6   7   8   9   10\n\n", 'utf-8'))
+                initial_string = self.visual_aid() + '\n'
+                tf.write(bytes(initial_string, 'utf-8'))
             tf.write(bytes(day, 'utf-8'))
             tf.flush()
             editor = os.environ.get('EDITOR', 'vim')
             call([editor, tf.name])
 
-            tf.seek(110)
+            tf.seek(len(initial_string))
             edited_day = json.loads(tf.read())
+            self.fill_implicit_fields(edited_day)
             self.database[edit_index] = edited_day
 
         self.dump()
