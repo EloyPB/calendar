@@ -77,16 +77,16 @@ class Calendar:
         self.dump()
 
     def fill_fields(self, day):
-        for field, field_type in zip(self.fields, self.types):
+        for field in self.fields:
             if field not in self.implicit_keywords:
                 while True:
                     value = input(field + ': ')
                     if value != '':
                         try:
-                            day[field] = field_type(value)
+                            day[field] = self.types[field](value)
                             break
                         except ValueError:
-                            print("Expecting " + str(field_type))
+                            print("Expecting " + str(self.types[field]))
                     else:
                         break
 
@@ -125,7 +125,7 @@ class Calendar:
             processing_date = last_date + timedelta(days=i)
             print("Data for", calendar.day_name[processing_date.weekday()], processing_date, "\n")
             # if any of the fields expects a number, print a scale from 0 to 10 as a visual aid
-            if int in self.types.values or float in self.types.values:
+            if int in self.types.values() or float in self.types.values():
                 print(self.visual_aid())
 
             day = {'date': str(processing_date)}
