@@ -158,7 +158,7 @@ class Calendar:
         day = json.dumps(self.database[edit_index], indent=4, separators=(',', ': '), ensure_ascii=False)
 
         with tempfile.NamedTemporaryFile(suffix=".tmp") as tf:
-            if int in self.types.values or float in self.types.values:
+            if int in self.types.values() or float in self.types.values():
                 initial_string = self.visual_aid() + '\n'
                 tf.write(bytes(initial_string, 'utf-8'))
             tf.write(bytes(day, 'utf-8'))
@@ -236,7 +236,7 @@ class Calendar:
                 values[day_num] = round(day[field], precision)
             else:
                 mask[day_num] = 1
-        return np.array(values), np.array(mask)
+        return np.ma.masked_array(values, mask)
 
     def list_to_bool(self, field, first_index, last_index, separator=', '):
         # get the list of elements and how many times each of them appears
@@ -277,37 +277,40 @@ class Calendar:
         return mat, mask, sorted_list
 
     @staticmethod
-    def bool_to_intervals(values, mask):
-        indices = []
+    def intervals(values):
         intervals = []
         intervals_mask = []
-        found_stream = False
+        beginning = 0
+        stream_found = False
         for day_num, value in enumerate(values):
-            if value and not found_stream:
-                found_stream = True
-                beginning = day_num
-            elif found_stream and mask[day_num]:
-                found_stream = False
-                indices.append(day_num)
-                intervals.append(0)
-                intervals_mask.append(1)
-            elif found_stream and value:
-                indices.append(day_num)
+            if stream_found and value:
                 intervals.append(day_num - beginning)
                 intervals_mask.append(0)
                 beginning = day_num
-        return indices, intervals, intervals_mask
+            else:
+                intervals.append(0)
+                intervals_mask.append(1)
+                if value:
+                    stream_found = True
+                    beginning = day_num
+                elif stream_found and values.mask[day_num]:
+                    stream_found = False
+        return np.ma.masked_array(intervals, intervals_mask)
 
     @staticmethod
-    def moving_average(day_indices, values, mask, window):
-        pass
+    def moving_average(values, window_size):
+        averaged = np.ma.masked_array(np.zeros(len(values)), np.zeros(len(values)))
+        averaged.mask[0:window_size-1] = True
+        for day_index in range(window_size-1, len(values)):
+            averaged[day_index] = np.mean(values[day_index-window_size+1:day_index])
+        return averaged
 
     def plot(self):
         parser = argparse.ArgumentParser()
         parser.add_argument("fields", help="fields to plot separated by commas (without spaces)")
         parser.add_argument("num_days", type=int, help="number of days to plot")
         parser.add_argument("-d", "--date", help="first date to plot")
-        parser.add_argument("-a", "--average", type=int, help="width of the moving average in days")
+        parser.add_argument("-a", "--average", type=int, help="window size in days")
         args = parser.parse_args()
 
         first_index, last_index = self.index_range(args.num_days, args.date)
@@ -324,46 +327,44 @@ class Calendar:
         prop_cycle = plt.rcParams['axes.prop_cycle']
         colors = prop_cycle.by_key()['color']
 
-        if '.i' in args.fields:
-            axr = ax.twinx()
-
-        fields = args.fields.split(',')
-        for plot_num, field in enumerate(fields):
+        complex_fields = args.fields.split(',')
+        for plot_num, complex_field in enumerate(complex_fields):
             color = colors[plot_num % len(colors)]
 
-            got_values = False
-            is_bool = False
-            for field_name in self.fields:
-                if field_name in field and self.types[field_name] is str:
-                    mat, mask, sorted_list = self.list_to_bool(field_name, first_index, last_index)
-                    factor = field.split(':')[1].strip('.i').strip('.b')
-                    column = sorted_list.index(factor)
-                    values = mat[:, column]
-                    got_values = True
-                    is_bool = True
-            if not got_values:
-                stripped_field = field.strip('.i').strip('.b')
-                values, mask = self.read_values(stripped_field, first_index, last_index)
+            field = complex_field.split(':')[0].split('.')[0]
+            if ':' in complex_field:
+                mat, mask, sorted_list = self.list_to_bool(complex_field.split(':')[0], first_index, last_index)
+                factor = complex_field.split(':')[1].split('.')[0]
+                values = mat[:, sorted_list.index(factor)]
+            else:
+                values = self.read_values(field, first_index, last_index)
+                if self.types[field] in (int, float):
+                    values /= 10
 
-            if '.i' in field:
-                indices, values, mask = self.bool_to_intervals(values, mask)
-                x = [dates[index] for index in indices]
-                axr.plot(x, np.ma.masked_array(values, mask), '.-', label=field, color=color)
+            # plot normal values
+            if '.b' in complex_field or self.types[field] in (int, float):
+                if args.average:
+                    values = self.moving_average(values, args.average)
+                ax.plot(dates, values, label=complex_field, color=color)
+                ax.legend(loc='upper left')
+
+            # plot intervals on a new axis
+            elif '.i' in complex_field:
+                intervals = self.intervals(values)
+                if args.average:
+                    intervals = self.moving_average(intervals, args.average)
+                axr = ax.twinx()
+                axr.plot(dates, intervals, label=complex_field, color=color)
                 axr.legend(loc='upper right')
-            elif '.b' in field:
-                ax.plot(dates, np.ma.masked_array(values, mask), '.-', label=field, color=color)
-                ax.legend(loc='upper left')
-            elif self.types[field.split(':')[0]] in (int, float):
-                values = values/10
-                ax.plot(dates, np.ma.masked_array(values, mask), '.-', label=field, color=color)
-                ax.legend(loc='upper left')
-            elif self.types[field.split(':')[0]] is bool or is_bool:
+
+            # plot events
+            elif ':' in complex_field or self.types[field] is bool:
                 events = []
                 for day_num, value in enumerate(values):
                     if value:
                         day_index = day_num + first_index
                         events.append(datetime.strptime(self.database[day_index]['date'], "%Y-%m-%d").date())
-                ax.eventplot(events, linelengths=20, label=field, color=color)
+                ax.eventplot(events, linelengths=20, label=complex_field, color=color)
                 ax.legend(loc='upper left')
 
         plt.show()
