@@ -11,17 +11,36 @@ from subprocess import call
 from scipy.stats.stats import pearsonr
 from datetime import date, datetime, timedelta
 
-# TO DO
-# plot all results of correlation in multiple figures if necessary
-# correlate all things
-# ignore days
-
 
 class Calendar:
     def __init__(self):
+        """Reads the database path and fields from a configuration file and loads the database.
+        """
         try:
             with open('config.txt') as f:
                 lines = [line.rstrip('\n') for line in f]
+                self.path = lines[0]
+                self.fields = []
+                self.types = {}
+                self.implicit_sources = {}
+                self.implicit_keywords = {}
+
+                for line in lines[1:]:
+                    words = line.split()
+                    self.fields.append(words[1])
+                    self.types[words[1]] = locate(words[0])
+                    if len(words) > 2:
+                        self.implicit_sources[words[1]] = words[2].split(':')[0]
+                        self.implicit_keywords[words[1]] = words[2].split(':')[1]
+
+                try:
+                    with open(self.path, 'r') as f:
+                        self.database = json.load(f)
+                except FileNotFoundError:
+                    print('Database not found, creating a new one...')
+                    self.database = []
+                    self.dump()
+
         except FileNotFoundError:
             print("\nConfiguration file not found. \nPlease create a file named 'config.txt' in this directory."
                   "\nThe first line must contain the path to the file where the data will be saved, "
@@ -33,35 +52,15 @@ class Calendar:
                   "\nFor implicit fields, the lines should look like: 'field_name implicit source_field:keyword'\n")
             exit()
 
-        self.path = lines[0]
-        self.fields = []
-        self.types = {}
-        self.implicit_sources = {}
-        self.implicit_keywords = {}
-
-        for line in lines[1:]:
-            words = line.split()
-            self.fields.append(words[1])
-            self.types[words[1]] = locate(words[0])
-            if len(words) > 2:
-                self.implicit_sources[words[1]] = words[2].split(':')[0]
-                self.implicit_keywords[words[1]] = words[2].split(':')[1]
-
-        try:
-            with open(self.path, 'r') as f:
-                self.database = json.load(f)
-        except FileNotFoundError:
-            print('Database not found, creating a new one...')
-            self.database = []
-            self.dump()
-
     def dump(self):
+        """Writes to the database file.
+        """
         with open(self.path, 'w') as f:
             json.dump(self.database, f, indent=4, separators=(',', ': '), ensure_ascii=False)
 
     def reorder(self):
-        """Reorder database according to config file"""
-
+        """Reorders the database according to the configuration file.
+        """
         new_database = []
         for day in self.database:
             new_day = {'date': day['date']}
@@ -77,6 +76,8 @@ class Calendar:
         self.dump()
 
     def fill_fields(self, day):
+        """Asks the user to input values for the explicit fields and adds them to the day's dictionary.
+        """
         for field in self.fields:
             if field not in self.implicit_keywords:
                 while True:
@@ -91,6 +92,8 @@ class Calendar:
                         break
 
     def fill_implicit_fields(self, day):
+        """Checks for implicit fields and adds them to the day's dictionary.
+        """
         for field, keyword in self.implicit_keywords.items():
             if self.implicit_sources[field] in day:
                 day[field] = keyword in day[self.implicit_sources[field]]
@@ -99,12 +102,15 @@ class Calendar:
 
     @staticmethod
     def visual_aid():
+        """Creates the string that produces a scale from 0 to 10.
+        """
         string = "            |---|---|---|---|---|---|---|---|---|---|\n"
         string += "            0   1   2   3   4   5   6   7   8   9   10\n"
         return string
 
     def add_days(self):
-        print("\n")
+        """Fill in missing days in the database.
+        """
         # find out current date, if it is before 20:00 the current day does not count
         date_today = date.today()
         if datetime.now().hour < 20:
@@ -117,26 +123,29 @@ class Calendar:
             last_date = date_today - timedelta(days=1)
         days_missing = (date_today - last_date).days
 
+        # get the information for each of the missing days
         if days_missing == 0:
             print("\nAlready up to date\n")
+        else:
+            for i in range(1, days_missing + 1):
+                processing_date = last_date + timedelta(days=i)
+                print("\nData for", calendar.day_name[processing_date.weekday()], processing_date, "\n")
 
-        # get the information for each of the missing days
-        for i in range(1, days_missing + 1):
-            processing_date = last_date + timedelta(days=i)
-            print("Data for", calendar.day_name[processing_date.weekday()], processing_date, "\n")
-            # if any of the fields expects a number, print a scale from 0 to 10 as a visual aid
-            if int in self.types.values() or float in self.types.values():
-                print(self.visual_aid())
+                # if any of the fields expects a number, print a scale from 0 to 10 as a visual aid
+                if int in self.types.values() or float in self.types.values():
+                    print(self.visual_aid())
 
-            day = {'date': str(processing_date)}
-            self.fill_fields(day)
-            self.fill_implicit_fields(day)
-            self.database.append(day)
+                day = {'date': str(processing_date)}
+                self.fill_fields(day)
+                self.fill_implicit_fields(day)
+                self.database.append(day)
 
-        self.dump()
-        print("\n")
+            self.dump()
+            print("\n")
 
     def date_to_index(self, processing_date):
+        """Finds the index of the database entry corresponding to some date.
+        """
         first_date = datetime.strptime(self.database[0]['date'], "%Y-%m-%d").date()
         processing_date = datetime.strptime(processing_date, "%Y-%m-%d").date()
         last_date = datetime.strptime(self.database[-1]['date'], "%Y-%m-%d").date()
@@ -145,7 +154,25 @@ class Calendar:
         else:
             print("Date out of range")
 
+    def index_range(self, num_days=None, first_date=None):
+        """Finds the first and last index corresponding to a period of num_days ending on the
+        last date (default) or starting on first_date.
+        """
+        if num_days is None:
+            num_days = len(self.database)
+
+        if first_date is None:
+            first_index = -num_days
+            last_index = 0
+        else:
+            first_index = self.date_to_index(first_date)
+            last_index = min(first_index + num_days, len(self.database))
+
+        return first_index, last_index
+
     def edit(self):
+        """Opens VIM to edit one database entry.
+        """
         parser = argparse.ArgumentParser()
         parser.add_argument("-d", "--date", help="date to edit")
         args = parser.parse_args()
@@ -166,32 +193,24 @@ class Calendar:
             editor = os.environ.get('EDITOR', 'vim')
             call([editor, tf.name])
 
-            tf.seek(len(initial_string))
+            if int in self.types.values() or float in self.types.values():
+                tf.seek(len(initial_string))
             edited_day = json.loads(tf.read())
             self.fill_implicit_fields(edited_day)
             self.database[edit_index] = edited_day
 
         self.dump()
 
-    def index_range(self, num_days, first_date=None):
-        if first_date is not None:
-            first_index = self.date_to_index(first_date)
-            last_index = min(first_index + num_days, len(self.database))
-        else:
-            first_index = -num_days
-            last_index = 0
-        return first_index, last_index
-
     def display(self):
+        """Displays on the terminal a period of num_days ending on the
+        last date (default) or starting on first_date.
+        """
         print("\n")
 
         parser = argparse.ArgumentParser()
         parser.add_argument("num_days", type=int, help="number of days to display")
         parser.add_argument("-d", "--date", help="first date to display")
         args = parser.parse_args()
-
-        week_days = ["Monday    ", "Tuesday   ", "Wednesday ", "Thursday  ",
-                     "Friday    ", "Saturday  ", "Sunday    "]
 
         brown = '\033[38;5;180m'
         blue = '\033[38;5;153m'
@@ -202,21 +221,26 @@ class Calendar:
         for day_index in range(first_index, last_index):
             day = self.database[day_index]
             processing_date = datetime.strptime(day['date'], "%Y-%m-%d").date()
-            week_day = week_days[processing_date.weekday()]
-
-            string = week_day + day['date'] + "  "
+            string = processing_date.strftime("%A %Y-%m-%d") + "  "
             for field in self.fields:
                 if field in day and field not in self.implicit_keywords:
                     value = day[field]
                     if type(value) is str:
                         # print strings in light brown, with implicit field keywords in light blue
                         string += '\n' + field + ': '
-                        words = value.split()
-                        for word in words:
-                            if word in self.implicit_keywords.values():
-                                string += blue + word + reset + ' '
+                        indices_implicit = []
+                        for implicit_keyword in self.implicit_keywords.values():
+                            if implicit_keyword in value:
+                                start = value.index(implicit_keyword)
+                                end = start + len(implicit_keyword)
+                                for index in range(start, end):
+                                    indices_implicit.append(index)
+                        for letter_index, letter in enumerate(value):
+                            if letter_index in indices_implicit:
+                                string += blue + letter + reset
                             else:
-                                string += brown + word + reset + ' '
+                                string += brown + letter + reset
+
                     elif type(value) is int or type(value) is float:
                         # print numbers following color gradient from 0:white to 10:green
                         rb = str(int((10 - value) * 25.5))
@@ -224,10 +248,12 @@ class Calendar:
                         string += field + ': ' + color + str(value) + reset + ' '
 
             print(string + '\n')
-
         print("\n")
 
     def read_values(self, field, first_index, last_index, precision=1):
+        """Reads the values of one field from the database.
+        """
+        last_index = min(last_index, len(self.database) - 1)
         mask = np.zeros(last_index-first_index)
         values = np.zeros(last_index-first_index)
         for day_num, day_index in enumerate(range(first_index, last_index)):
@@ -238,7 +264,32 @@ class Calendar:
                 mask[day_num] = 1
         return np.ma.masked_array(values, mask)
 
+    @staticmethod
+    def intervals(values):
+        """Calculates the time intervals between occurrences of a boolean variable.
+        """
+        intervals = []
+        intervals_mask = []
+        beginning = 0
+        stream_found = False
+        for day_num, value in enumerate(values):
+            if stream_found and value:
+                intervals.append(day_num - beginning)
+                intervals_mask.append(0)
+                beginning = day_num
+            else:
+                intervals.append(0)
+                intervals_mask.append(1)
+                if value:
+                    stream_found = True
+                    beginning = day_num
+                elif stream_found and values.mask[day_num]:
+                    stream_found = False
+        return np.ma.masked_array(intervals, intervals_mask)
+
     def list_to_bool(self, field, first_index, last_index, separator=', '):
+        """Transforms a field consisting on lists of items into a matrix of days x items.
+        """
         # get the list of elements and how many times each of them appears
         unsorted_list = []
         unsorted_counts = []
@@ -277,35 +328,44 @@ class Calendar:
         return mat, mask, sorted_list
 
     @staticmethod
-    def intervals(values):
-        intervals = []
-        intervals_mask = []
-        beginning = 0
-        stream_found = False
-        for day_num, value in enumerate(values):
-            if stream_found and value:
-                intervals.append(day_num - beginning)
-                intervals_mask.append(0)
-                beginning = day_num
-            else:
-                intervals.append(0)
-                intervals_mask.append(1)
-                if value:
-                    stream_found = True
-                    beginning = day_num
-                elif stream_found and values.mask[day_num]:
-                    stream_found = False
-        return np.ma.masked_array(intervals, intervals_mask)
-
-    @staticmethod
     def moving_average(values, window_size):
+        """Calculates a moving average over a window of size window_size.
+        """
         averaged = np.ma.masked_array(np.zeros(len(values)), np.zeros(len(values)))
         averaged.mask[0:window_size-1] = True
         for day_index in range(window_size-1, len(values)):
             averaged[day_index] = np.mean(values[day_index-window_size+1:day_index])
         return averaged
 
+    def get_values(self, complex_fields, first_index, last_index, averaging_window=0):
+        values = []
+        first_date = datetime.strptime(self.database[first_index]['date'], "%Y-%m-%d").date()
+        dates = [first_date + timedelta(days=n) for n in range(last_index - first_index)]
+
+        for complex_field in complex_fields:
+            field = complex_field.split(':')[0].split('.')[0]
+            if ':' in complex_field:
+                mat, mask, sorted_list = self.list_to_bool(complex_field.split(':')[0], first_index, last_index)
+                factor = complex_field.split(':')[1].split('.')[0]
+                values_read = np.ma.masked_array(mat[:, sorted_list.index(factor)], mask)
+            else:
+                values_read = self.read_values(field, first_index, last_index)
+                if self.types[field] in (int, float):
+                    values_read /= 10
+
+            if '.i' in complex_field:
+                values_read = self.intervals(values_read)
+
+            if averaging_window and ('.b' in complex_field or '.i' in complex_field
+                                     or self.types[field] in (int, float)):
+                values_read = self.moving_average(values_read, averaging_window)
+            values.append(values_read)
+
+        return dates, values
+
     def plot(self):
+        """Plotting function.
+        """
         parser = argparse.ArgumentParser()
         parser.add_argument("fields", help="fields to plot separated by commas (without spaces)")
         parser.add_argument("num_days", type=int, help="number of days to plot")
@@ -314,47 +374,30 @@ class Calendar:
         args = parser.parse_args()
 
         first_index, last_index = self.index_range(args.num_days, args.date)
-        num_days = last_index - first_index
-
-        # prepare dates for x tick labels
-        first_date = datetime.strptime(self.database[first_index]['date'], "%Y-%m-%d").date()
-        dates = [first_date + timedelta(days=n) for n in range(num_days)]
 
         fig, ax = plt.subplots()
         ax.set_ylim(0, 1)
-        ax.set_yticks([0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0])
+        ax.set_yticks(np.linspace(0, 1, 11))
         ax.yaxis.grid()
+        axr = ax.twinx()
         prop_cycle = plt.rcParams['axes.prop_cycle']
         colors = prop_cycle.by_key()['color']
 
         complex_fields = args.fields.split(',')
-        for plot_num, complex_field in enumerate(complex_fields):
+        dates, values = self.get_values(complex_fields, first_index, last_index, args.average)
+        for plot_num, (complex_field, values) in enumerate(zip(complex_fields, values)):
             color = colors[plot_num % len(colors)]
-
             field = complex_field.split(':')[0].split('.')[0]
-            if ':' in complex_field:
-                mat, mask, sorted_list = self.list_to_bool(complex_field.split(':')[0], first_index, last_index)
-                factor = complex_field.split(':')[1].split('.')[0]
-                values = mat[:, sorted_list.index(factor)]
-            else:
-                values = self.read_values(field, first_index, last_index)
-                if self.types[field] in (int, float):
-                    values /= 10
 
             # plot normal values
-            if '.b' in complex_field or self.types[field] in (int, float):
-                if args.average:
-                    values = self.moving_average(values, args.average)
-                ax.plot(dates, values, label=complex_field, color=color)
+            if '.b' in complex_field in complex_field or self.types[field] in (int, float):
+                ax.plot(dates, values, label=complex_field, color=color, marker='.')
                 ax.legend(loc='upper left')
 
             # plot intervals on a new axis
             elif '.i' in complex_field:
-                intervals = self.intervals(values)
-                if args.average:
-                    intervals = self.moving_average(intervals, args.average)
-                axr = ax.twinx()
-                axr.plot(dates, intervals, label=complex_field, color=color)
+                axr.plot(np.array(dates)[~values.mask], values[~values.mask], label=complex_field,
+                         color=color, marker='.')
                 axr.legend(loc='upper right')
 
             # plot events
@@ -369,7 +412,28 @@ class Calendar:
 
         plt.show()
 
+    def histogram(self):
+        """Plots a histogram.
+        """
+        parser = argparse.ArgumentParser()
+        parser.add_argument("field", help="fields to plot separated by commas (without spaces)")
+        parser.add_argument("-n", "--num_days", type=int, help="number of days to plot")
+        parser.add_argument("-d", "--date", help="first date to plot")
+        args = parser.parse_args()
+
+        first_index, last_index = self.index_range(args.num_days, args.date)
+
+        _, values = self.get_values([args.field], first_index, last_index)
+        values = values[0]
+
+    def percentiles(self):
+        pass
+
+    def cut(self):
+        pass
+
     def correlate(self):
+        """Correlates boolean variables contained in lists in factors_field with a multivalued variable."""
         np.seterr(all='ignore')
         parser = argparse.ArgumentParser()
         parser.add_argument("factors_field", help="field containing lists of factors")
@@ -378,7 +442,7 @@ class Calendar:
         args = parser.parse_args()
 
         factors_mat, factors_mask, factors_list = self.list_to_bool(args.factors_field, 0, len(self.database))
-        values, values_mask = self.read_values(args.values_field, 0, len(self.database))
+        values = self.read_values(args.values_field, 0, len(self.database))
 
         # calculate correlations
         num_factors = len(factors_list)
@@ -390,7 +454,7 @@ class Calendar:
             for day_num, mask in enumerate(factors_mask):
                 if mask == 0:
                     values_day_num = day_num + time_shift
-                    if values_day_num < len(values) and values_mask[values_day_num] == 0:
+                    if values_day_num < len(values) and values.mask[values_day_num] == 0:
                         corrected_mat.append(factors_mat[day_num])
                         corrected_values.append(values[values_day_num])
             corrected_mat = np.array(corrected_mat)
@@ -399,9 +463,9 @@ class Calendar:
 
         # plot
         num_rows = 25
-        num_cols = min(math.ceil(num_factors / num_rows), 5)
+        num_cols = int(min(math.ceil(num_factors / num_rows), 5))
         corr = np.pad(corr, ((0, max(num_rows * num_cols - num_factors, 0)), (0, 0)), 'constant',
-                            constant_values=np.nan)
+                      constant_values=np.nan)
 
         fig, ax = plt.subplots(1, num_cols)
         for col_num in range(num_cols):
@@ -412,3 +476,4 @@ class Calendar:
             ax[col_num].set_yticklabels(factors_list[first_index:last_index])
 
         plt.show()
+
