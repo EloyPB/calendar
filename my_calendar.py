@@ -154,19 +154,15 @@ class Calendar:
         else:
             print("Date out of range")
 
-    def index_range(self, num_days=None, first_date=None):
+    def index_range(self, num_days, first_date=None):
         """Finds the first and last index corresponding to a period of num_days ending on the
         last date (default) or starting on first_date.
         """
-        if num_days is None:
-            num_days = len(self.database)
-
         if first_date is None:
-            first_index = -num_days
-            last_index = 0
+            first_index = max(0, len(self.database) - num_days)
         else:
             first_index = self.date_to_index(first_date)
-            last_index = min(first_index + num_days, len(self.database))
+        last_index = min(first_index + num_days, len(self.database))
 
         return first_index, last_index
 
@@ -253,7 +249,7 @@ class Calendar:
     def read_values(self, field, first_index, last_index, precision=1):
         """Reads the values of one field from the database.
         """
-        last_index = min(last_index, len(self.database) - 1)
+        last_index = min(last_index, len(self.database))
         mask = np.zeros(last_index-first_index)
         values = np.zeros(last_index-first_index)
         for day_num, day_index in enumerate(range(first_index, last_index)):
