@@ -1,0 +1,8 @@
+/media/DATA/MEGA/calendar.json
+float sat
+float sharp
+float ph-e
+float exp
+str text
+str food
+bool pain text:PAIN
