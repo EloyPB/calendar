@@ -1,4 +1,4 @@
-/media/DATA/MEGA/calendar.json
+D:/MEGA/calendar.json
 float sat
 float sharp
 float ph-e
