@@ -34,7 +34,7 @@ class Calendar:
                         self.implicit_keywords[words[1]] = words[2].split(':')[1]
 
                 try:
-                    with open(self.path, 'r') as f:
+                    with open(self.path, 'r', encoding='utf-8') as f:
                         self.database = json.load(f)
                 except FileNotFoundError:
                     print('Database not found, creating a new one...')
@@ -55,7 +55,7 @@ class Calendar:
     def dump(self):
         """Writes to the database file.
         """
-        with open(self.path, 'w') as f:
+        with open(self.path, 'w', encoding='utf-8') as f:
             json.dump(self.database, f, indent=4, separators=(',', ': '), ensure_ascii=False)
 
     def reorder(self):
