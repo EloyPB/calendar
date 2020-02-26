@@ -112,23 +112,31 @@ class Calendar:
         """Fill in missing days in the database.
         """
         # find out current date, if it is before 20:00 the current day does not count
-        date_today = date.today()
-        if datetime.now().hour < 20:
-            date_today -= timedelta(days=1)
+        parser = argparse.ArgumentParser()
+        parser.add_argument("-d", "--date", help="upper bound for the date")
+        parser.add_argument("-s", "--skip", help="skip unfilled", action="store_true")
+        args = parser.parse_args()
 
-        # calculate how many days are missing
-        if len(self.database) > 0:
-            last_date = datetime.strptime(self.database[-1]['date'], "%Y-%m-%d").date()
+        if args.date is not None:
+            end_date = datetime.strptime(args.date, "%Y-%m-%d").date()
         else:
-            last_date = date_today - timedelta(days=1)
-        days_missing = (date_today - last_date).days
+            end_date = date.today()
+            if datetime.now().hour < 20:
+                end_date -= timedelta(days=1)
+
+        if args.skip or len(self.database) == 0:
+            start_date = end_date - timedelta(days=1)
+        else:
+            start_date = datetime.strptime(self.database[-1]['date'], "%Y-%m-%d").date()
+
+        days_missing = (end_date - start_date).days
 
         # get the information for each of the missing days
         if days_missing == 0:
             print("\nAlready up to date\n")
         else:
             for i in range(1, days_missing + 1):
-                processing_date = last_date + timedelta(days=i)
+                processing_date = start_date + timedelta(days=i)
                 print("\nData for", calendar.day_name[processing_date.weekday()], processing_date, "\n")
 
                 # if any of the fields expects a number, print a scale from 0 to 10 as a visual aid
