@@ -44,7 +44,7 @@ class Calendar:
         except FileNotFoundError:
             print("\nConfiguration file not found. \nPlease create a file named 'config.txt' in this directory."
                   "\nThe first line must contain the path to the file where the data will be saved, "
-                  "including the desired file name with .json extension."
+                  "including the desired file name ending with .json."
                   "\nIn subsequent lines declare the fields to be recorded. Each line must consist of a type "
                   "(int, float, bool, str) followed by a space and the name of the field. "
                   "\nIt is also possible to add implicit boolean fields "
@@ -158,7 +158,9 @@ class Calendar:
         processing_date = datetime.strptime(processing_date, "%Y-%m-%d").date()
         last_date = datetime.strptime(self.database[-1]['date'], "%Y-%m-%d").date()
         if first_date <= processing_date <= last_date:
-            return (processing_date - first_date).days
+            for index in range(len(self.database)-1, -1, -1):
+                if datetime.strptime(self.database[index]['date'], "%Y-%m-%d").date() < processing_date:
+                    return index + 1
         else:
             print("Date out of range")
 
