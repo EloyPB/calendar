@@ -49,7 +49,7 @@ class Calendar:
                   "(int, float, bool, str) followed by a space and the name of the field. "
                   "\nIt is also possible to add implicit boolean fields "
                   "which will take a value of True if a keyword is mentioned in the string of another field. "
-                  "\nFor implicit fields, the lines should look like: 'field_name implicit source_field:keyword'\n")
+                  "\nFor implicit fields, the lines should look like: 'bool field_name source_field:keyword'\n")
             exit()
 
     def dump(self):
@@ -154,27 +154,14 @@ class Calendar:
     def date_to_index(self, processing_date):
         """Finds the index of the database entry corresponding to some date.
         """
-        first_date = datetime.strptime(self.database[0]['date'], "%Y-%m-%d").date()
-        processing_date = datetime.strptime(processing_date, "%Y-%m-%d").date()
-        last_date = datetime.strptime(self.database[-1]['date'], "%Y-%m-%d").date()
-        if first_date <= processing_date <= last_date:
+        if processing_date >= self.database[-1]['date']:
+            return len(self.database)
+        elif processing_date <= self.database[0]['date']:
+            return 0
+        else:
             for index in range(len(self.database)-1, -1, -1):
-                if datetime.strptime(self.database[index]['date'], "%Y-%m-%d").date() < processing_date:
+                if self.database[index]['date'] < processing_date:
                     return index + 1
-        else:
-            print("Date out of range")
-
-    def index_range(self, num_days, first_date=None):
-        """Finds the first and last index corresponding to a period of num_days ending on the
-        last date (default) or starting on first_date.
-        """
-        if first_date is None:
-            first_index = max(0, len(self.database) - num_days)
-        else:
-            first_index = self.date_to_index(first_date)
-        last_index = min(first_index + num_days, len(self.database))
-
-        return first_index, last_index
 
     def edit(self):
         """Opens VIM to edit one database entry.
@@ -206,6 +193,22 @@ class Calendar:
             self.database[edit_index] = edited_day
 
         self.dump()
+
+    def index_range(self, num_days, first_date=None):
+        """Finds the first and last index corresponding to a period of num_days ending on the
+        last date (default) or starting on first_date.
+        """
+        if first_date is None:
+            last_index = len(self.database)
+            first_date = datetime.strptime(self.database[-1]['date'], "%Y-%m-%d").date() - timedelta(days=num_days)
+            first_date = first_date.strftime("%Y-%m-%d")
+        else:
+            last_date = datetime.strptime(first_date, "%Y-%m-%d").date() + timedelta(days=num_days)
+            last_index = self.date_to_index(last_date.strftime("%Y-%m-%d"))
+
+        first_index = self.date_to_index(first_date)
+
+        return first_index, last_index
 
     def display(self):
         """Displays on the terminal a period of num_days ending on the
@@ -256,42 +259,28 @@ class Calendar:
             print(string + '\n')
         print("\n")
 
-    def read_values(self, field, first_index, last_index, precision=1):
+    def read_values(self, field, first_index, last_index):
         """Reads the values of one field from the database.
         """
-        last_index = min(last_index, len(self.database))
-        mask = np.zeros(last_index-first_index)
-        values = np.zeros(last_index-first_index)
-        for day_num, day_index in enumerate(range(first_index, last_index)):
-            day = self.database[day_index]
+        dates = []
+        values = []
+        for day in self.database[first_index:last_index]:
             if field in day:
-                values[day_num] = round(day[field], precision)
-            else:
-                mask[day_num] = 1
-        return np.ma.masked_array(values, mask)
+                dates.append(datetime.strptime(day['date'], "%Y-%m-%d").date())
+                values.append(day[field])
+        return dates, np.array(values)
 
     @staticmethod
-    def intervals(values):
+    def intervals(all_dates, values):
         """Calculates the time intervals between occurrences of a boolean variable.
         """
+        dates = []
         intervals = []
-        intervals_mask = []
-        beginning = 0
-        stream_found = False
-        for day_num, value in enumerate(values):
-            if stream_found and value:
-                intervals.append(day_num - beginning)
-                intervals_mask.append(0)
-                beginning = day_num
-            else:
-                intervals.append(0)
-                intervals_mask.append(1)
-                if value:
-                    stream_found = True
-                    beginning = day_num
-                elif stream_found and values.mask[day_num]:
-                    stream_found = False
-        return np.ma.masked_array(intervals, intervals_mask)
+        indices = np.nonzero(values)[0]
+        for left, right in zip(indices[:len(indices)-1], indices[1:]):
+            dates.append(all_dates[right])
+            intervals.append((all_dates[right] - all_dates[left]).days)
+        return dates, intervals
 
     def list_to_bool(self, field, first_index, last_index, separator=', '):
         """Transforms a field consisting on lists of items into a matrix of days x items.
@@ -311,8 +300,7 @@ class Calendar:
 
         # sort factors by frequency
         sorted_counts = sorted(unsorted_counts, reverse=True)
-        sorted_list = sorted(unsorted_list, reverse=True,
-                             key=lambda e: unsorted_counts[unsorted_list.index(e)])
+        sorted_list = sorted(unsorted_list, reverse=True, key=lambda e: unsorted_counts[unsorted_list.index(e)])
 
         # print sorted list
         for factor, count in zip(sorted_list, sorted_counts):
@@ -344,30 +332,30 @@ class Calendar:
         return averaged
 
     def get_values(self, complex_fields, first_index, last_index, averaging_window=0):
-        values = []
-        first_date = datetime.strptime(self.database[first_index]['date'], "%Y-%m-%d").date()
-        dates = [first_date + timedelta(days=n) for n in range(last_index - first_index)]
+        all_values = []
+        all_dates = []
 
         for complex_field in complex_fields:
             field = complex_field.split(':')[0].split('.')[0]
             if ':' in complex_field:
                 mat, mask, sorted_list = self.list_to_bool(complex_field.split(':')[0], first_index, last_index)
                 factor = complex_field.split(':')[1].split('.')[0]
-                values_read = np.ma.masked_array(mat[:, sorted_list.index(factor)], mask)
+                values = np.ma.masked_array(mat[:, sorted_list.index(factor)], mask)
             else:
-                values_read = self.read_values(field, first_index, last_index)
+                dates, values = self.read_values(field, first_index, last_index)
                 if self.types[field] in (int, float):
-                    values_read /= 10
+                    values /= 10
 
             if '.i' in complex_field:
-                values_read = self.intervals(values_read)
+                dates, values = self.intervals(dates, values)
 
             if averaging_window and ('.b' in complex_field or '.i' in complex_field
                                      or self.types[field] in (int, float)):
-                values_read = self.moving_average(values_read, averaging_window)
-            values.append(values_read)
+                values = self.moving_average(values, averaging_window)
+            all_values.append(values)
+            all_dates.append(dates)
 
-        return dates, values
+        return all_dates, all_values
 
     def plot(self):
         """Plotting function.
@@ -390,8 +378,8 @@ class Calendar:
         colors = prop_cycle.by_key()['color']
 
         complex_fields = args.fields.split(',')
-        dates, values = self.get_values(complex_fields, first_index, last_index, args.average)
-        for plot_num, (complex_field, values) in enumerate(zip(complex_fields, values)):
+        all_dates, all_values = self.get_values(complex_fields, first_index, last_index, args.average)
+        for plot_num, (complex_field, dates, values) in enumerate(zip(complex_fields, all_dates, all_values)):
             color = colors[plot_num % len(colors)]
             field = complex_field.split(':')[0].split('.')[0]
 
@@ -402,18 +390,13 @@ class Calendar:
 
             # plot intervals on a new axis
             elif '.i' in complex_field:
-                axr.plot(np.array(dates)[~values.mask], values[~values.mask], label=complex_field,
-                         color=color, marker='.')
+                axr.plot(dates, values, label=complex_field, color=color, marker='.')
                 axr.legend(loc='upper right')
 
             # plot events
             elif ':' in complex_field or self.types[field] is bool:
-                events = []
-                for day_num, value in enumerate(values):
-                    if value:
-                        day_index = day_num + first_index
-                        events.append(datetime.strptime(self.database[day_index]['date'], "%Y-%m-%d").date())
-                ax.eventplot(events, linelengths=20, label=complex_field, color=color)
+                event_dates = [date for date, value in zip(dates, values) if value]
+                ax.eventplot(event_dates, linelengths=20, label=complex_field, color=color)
                 ax.legend(loc='upper left')
 
         plt.show()
