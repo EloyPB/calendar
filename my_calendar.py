@@ -156,7 +156,7 @@ class Calendar:
         """Finds the index of the database entry corresponding to some date.
         """
         if processing_date >= self.database[-1]['date']:
-            return len(self.database)
+            return len(self.database)-1
         elif processing_date <= self.database[0]['date']:
             return 0
         else:
@@ -265,10 +265,16 @@ class Calendar:
         """
         dates = []
         values = []
+        found_streak = False
         for day in self.database[first_index:last_index]:
             if field in day:
                 dates.append(datetime.strptime(day['date'], "%Y-%m-%d").date())
                 values.append(day[field])
+                found_streak = True
+            elif found_streak:
+                dates.append(datetime.strptime(day['date'], "%Y-%m-%d").date())
+                values.append(np.nan)
+                found_streak = False
         return np.array(dates), np.array(values)
 
     @staticmethod
@@ -282,45 +288,6 @@ class Calendar:
             dates.append(all_dates[right])
             intervals.append((all_dates[right] - all_dates[left]).days)
         return np.array(dates), np.array(intervals)
-
-    def list_to_bool(self, field, first_index, last_index, separator=', '):
-        """Transforms a field consisting on lists of items into a matrix of days x items.
-        """
-        # get the list of elements and how many times each of them appears
-        unsorted_list = []
-        unsorted_counts = []
-        for day_num, day_index in enumerate(range(first_index, last_index)):
-            day = self.database[day_index]
-            if field in day:
-                for elem in day[field].split(separator):
-                    if elem in unsorted_list:
-                        unsorted_counts[unsorted_list.index(elem)] += 1
-                    else:
-                        unsorted_list.append(elem)
-                        unsorted_counts.append(1)
-
-        # sort factors by frequency
-        sorted_counts = sorted(unsorted_counts, reverse=True)
-        sorted_list = sorted(unsorted_list, reverse=True, key=lambda e: unsorted_counts[unsorted_list.index(e)])
-
-        # print sorted list
-        for factor, count in zip(sorted_list, sorted_counts):
-            print(count, factor)
-        print('\n')
-
-        # create matrix
-        mat = np.zeros((last_index-first_index, len(sorted_list)))
-        mask = np.zeros(last_index-first_index)
-        for day_num, day_index in enumerate(range(first_index, last_index)):
-            day = self.database[day_index]
-            if field in day:
-                day_list = day[field].split(separator)
-                for elem_num, elem in enumerate(sorted_list):
-                    if elem in day_list:
-                        mat[day_num, elem_num] = 1
-            else:
-                mask[day_num] = 1
-        return mat, mask, sorted_list
 
     @staticmethod
     def moving_average(dates, values, window_size):
@@ -336,11 +303,24 @@ class Calendar:
             right = left + timedelta(days=window_size-1)
             if right in dates:
                 selected_values = values[(dates >= left) & (dates <= right)]
+                out_dates.append(right)
                 if ~np.isnan(selected_values[-1]):
                     out_values.append(np.nanmean(selected_values))
-                    out_dates.append(right)
+                else:
+                    out_values.append(np.nan)
 
         return out_dates, out_values
+
+    def keyword_to_bool(self, field, keyword, first_index, last_index):
+        dates = []
+        values = []
+        for day in self.database[first_index:last_index]:
+            keyword_found = False
+            if field in day and keyword in day[field]:
+                keyword_found = True
+            values.append(keyword_found)
+            dates.append(datetime.strptime(day['date'], "%Y-%m-%d").date())
+        return np.array(dates), np.array(values)
 
     def get_values(self, complex_fields, first_index, last_index, averaging_window=0):
         all_values = []
@@ -349,9 +329,8 @@ class Calendar:
         for complex_field in complex_fields:
             field = complex_field.split(':')[0].split('.')[0]
             if ':' in complex_field:
-                mat, mask, sorted_list = self.list_to_bool(complex_field.split(':')[0], first_index, last_index)
-                factor = complex_field.split(':')[1].split('.')[0]
-                values = np.ma.masked_array(mat[:, sorted_list.index(factor)], mask)
+                keyword = complex_field.split(':')[1].split('.')[0]
+                dates, values = self.keyword_to_bool(field, keyword, first_index, last_index)
             else:
                 dates, values = self.read_values(field, first_index, last_index)
                 if self.types[field] in (int, float):
@@ -367,20 +346,6 @@ class Calendar:
             all_dates.append(dates)
 
         return all_dates, all_values
-
-    @staticmethod
-    def insert_nans(dates, values):
-        nan_dates = []
-        nan_values = []
-        for left, right, value in zip(dates[:-1], dates[1:], values[:-1]):
-            nan_dates.append(left)
-            nan_values.append(value)
-            if (right - left).days > 1:
-                nan_dates.append(left + timedelta(days=1))
-                nan_values.append(np.nan)
-        nan_dates.append(dates[-1])
-        nan_values.append(values[-1])
-        return nan_dates, nan_values
 
     def plot(self):
         """Plotting function.
@@ -410,7 +375,6 @@ class Calendar:
 
             # plot normal values
             if '.b' in complex_field in complex_field or self.types[field] in (int, float):
-                dates, values = self.insert_nans(dates, values)
                 ax.plot(dates, values, label=complex_field, color=color, marker='.')
                 ax.legend(loc='upper left')
 
@@ -440,16 +404,43 @@ class Calendar:
 
         first_index, last_index = self.index_range(args.num_days, args.date)
 
-        _, values = self.get_values([args.field], first_index, last_index)
-        values = values[0]
+    def lists_to_mat(self, field, first_index, last_index, separator=', '):
+        """Transforms a field consisting on lists of items into a matrix of days x items.
+        """
+        # get the list of elements and how many times each of them appears
+        unsorted_list = []
+        unsorted_counts = []
+        dates = []
+        for day in self.database[first_index:last_index]:
+            if field in day:
+                dates.append(datetime.strptime(day['date'], "%Y-%m-%d").date())
+                for elem in day[field].split(separator):
+                    if elem in unsorted_list:
+                        unsorted_counts[unsorted_list.index(elem)] += 1
+                    else:
+                        unsorted_list.append(elem)
+                        unsorted_counts.append(1)
 
-    def percentiles(self):
-        pass
+        # sort factors by frequency
+        sorted_counts = sorted(unsorted_counts, reverse=True)
+        sorted_list = sorted(unsorted_list, reverse=True, key=lambda e: unsorted_counts[unsorted_list.index(e)])
 
-    def cut(self):
-        pass
+        # print sorted list
+        for factor, count in zip(sorted_list, sorted_counts):
+            print(count, factor)
+        print('\n')
 
-    def correlate(self):
+        # create matrix
+        mat = np.zeros((len(dates), len(sorted_list)), dtype=bool)
+        day_num = 0
+        for day in self.database[first_index:last_index]:
+            if field in day:
+                for factor in day[field].split(separator):
+                    mat[day_num, sorted_list.index(factor)] = True
+                day_num += 1
+        return np.array(dates), sorted_list, mat
+
+    def correlate(self, p_threshold=0.05):
         """Correlates boolean variables contained in lists in factors_field with a multivalued variable."""
         np.seterr(all='ignore')
         parser = argparse.ArgumentParser()
@@ -458,25 +449,47 @@ class Calendar:
         parser.add_argument("-w", "--window", help="window size", default=5, type=int)
         args = parser.parse_args()
 
-        factors_mat, factors_mask, factors_list = self.list_to_bool(args.factors_field, 0, len(self.database))
-        values = self.read_values(args.values_field, 0, len(self.database))
+        first_index = 0
+        for day_num, day in enumerate(self.database):
+            if args.values_field in day:
+                first_index = day_num
+                break
+
+        last_index = len(self.database)
+        for day_num, day in enumerate(self.database[::-1]):
+            if args.values_field in day:
+                last_index = len(self.database) - day_num
+                break
+
+        factor_dates, factors_list, factors_mat = self.lists_to_mat(args.factors_field, first_index, last_index)
 
         # calculate correlations
         num_factors = len(factors_list)
         corr = np.zeros((num_factors, args.window))
+        p = np.zeros((num_factors, args.window))
 
-        for time_shift in range(0, args.window):
-            corrected_mat = []
-            corrected_values = []
-            for day_num, mask in enumerate(factors_mask):
-                if mask == 0:
-                    values_day_num = day_num + time_shift
-                    if values_day_num < len(values) and values.mask[values_day_num] == 0:
-                        corrected_mat.append(factors_mat[day_num])
-                        corrected_values.append(values[values_day_num])
-            corrected_mat = np.array(corrected_mat)
+        for time_shift in range(args.window):
+            values = []
+            for factor_date in factor_dates:
+                target_date = (factor_date + timedelta(days=time_shift)).strftime("%Y-%m-%d")
+                date_index = self.date_to_index(target_date)
+                if self.database[date_index]['date'] == target_date and args.values_field in self.database[date_index]:
+                    values.append(self.database[date_index][args.values_field])
+                else:
+                    values.append(np.nan)
+            values = np.array(values)
+            not_nan = ~np.isnan(values)
             for factor_num in range(num_factors):
-                corr[factor_num, time_shift] = pearsonr(corrected_mat[:, factor_num], corrected_values)[0]
+                x = factors_mat[not_nan, factor_num]
+                y = values[not_nan]
+                if (x != x[0]).any() and (y != y[0]).any():
+                    fit = pearsonr(factors_mat[not_nan, factor_num], values[not_nan])
+                    corr[factor_num, time_shift] = fit[0]
+                    p[factor_num, time_shift] = fit[1]
+                else:
+                    corr[factor_num, time_shift] = np.nan
+                    p[factor_num, time_shift] = np.nan
+
 
         # plot
         num_rows = 25
@@ -484,13 +497,25 @@ class Calendar:
         corr = np.pad(corr, ((0, max(num_rows * num_cols - num_factors, 0)), (0, 0)), 'constant',
                       constant_values=np.nan)
 
-        fig, ax = plt.subplots(1, num_cols)
+        fig, ax = plt.subplots(1, num_cols + 1, figsize=(11, 5), constrained_layout=True,
+                               gridspec_kw={'width_ratios': [1 for _ in range(num_cols)]+[0.05]})
+        v_min = np.nanmin(corr)
+        v_max = np.nanmax(corr)
         for col_num in range(num_cols):
             first_index = col_num * num_rows
             last_index = (col_num + 1) * num_rows
-            ax[col_num].matshow(corr[first_index:last_index], vmin=-1, vmax=1)
-            ax[col_num].set_yticks([i for i in range(num_rows)])
-            ax[col_num].set_yticklabels(factors_list[first_index:last_index])
+            mat = ax[col_num].matshow(corr[first_index:last_index], vmin=v_min, vmax=v_max)
+            for factor_index in range(first_index, min(last_index, len(factors_list))):
+                for time_shift in range(args.window):
+                    if p[factor_index, time_shift] < p_threshold:
+                        rect = plt.Rectangle((time_shift - 0.5, factor_index % num_rows - 0.5), 1, 1,
+                                             edgecolor="C1", fill=False)
+                        ax[col_num].add_patch(rect)
+                        print(factors_list[factor_index], time_shift)
 
+            ax[col_num].set_yticks([i for i in range(min(num_rows, len(factors_list)-first_index))])
+            ax[col_num].set_yticklabels(factors_list[first_index:last_index])
+            ax[col_num].xaxis.set_ticks_position('top')
+        fig.colorbar(mat, cax=ax[-1])
         plt.show()
 
