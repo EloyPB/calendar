@@ -8,7 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from pydoc import locate
-import subprocess as sp
+from subprocess import call
 from scipy.stats.stats import pearsonr
 from datetime import date, datetime, timedelta
 
@@ -178,30 +178,22 @@ class Calendar:
 
         day = json.dumps(self.database[edit_index], indent=4, separators=(',', ': '), ensure_ascii=False)
 
-        temp_file_name = 'day.temp'
-        f = open(temp_file_name, 'w')
-        editor = 'notepad.exe'
+        with tempfile.NamedTemporaryFile(suffix=".tmp") as tf:
+            if int in self.types.values() or float in self.types.values():
+                initial_string = self.visual_aid() + '\n'
+                tf.write(bytes(initial_string, 'utf-8'))
+            tf.write(bytes(day, 'utf-8'))
+            tf.flush()
+            editor = os.environ.get('EDITOR', 'vim')
+            call([editor, tf.name])
 
-        if int in self.types.values() or float in self.types.values():
-            initial_string = self.visual_aid() + '\n'
-            f.write(initial_string)
-            offset = len(initial_string)
-        else:
-            offset = 0
-        f.write(day)
-        f.close()
+            if int in self.types.values() or float in self.types.values():
+                tf.seek(len(initial_string))
+            edited_day = json.loads(tf.read())
+            self.fill_implicit_fields(edited_day)
+            self.database[edit_index] = edited_day
 
-        sp.call([editor, temp_file_name])
-
-        with open(temp_file_name, 'r') as f:
-            f.seek(offset)
-            edited_day = json.loads(f.read())
-
-        self.fill_implicit_fields(edited_day)
-        self.database[edit_index] = edited_day
         self.dump()
-        
-        os.remove(temp_file_name)
 
     def index_range(self, num_days, first_date=None):
         """Finds the first and last index corresponding to a period of num_days ending on the
@@ -230,6 +222,10 @@ class Calendar:
         parser.add_argument("-d", "--date", help="first date to display")
         args = parser.parse_args()
 
+        brown = '\033[38;5;180m'
+        blue = '\033[38;5;153m'
+        reset = '\033[0m'
+
         first_index, last_index = self.index_range(args.num_days, args.date)
 
         for day_index in range(first_index, last_index):
@@ -238,7 +234,29 @@ class Calendar:
             string = processing_date.strftime("%A %Y-%m-%d") + "  "
             for field in self.fields:
                 if field in day and field not in self.implicit_keywords:
-                    string += '\n' + field + ': ' + str(day[field])
+                    value = day[field]
+                    if type(value) is str:
+                        # print strings in light brown, with implicit field keywords in light blue
+                        string += '\n' + field + ': '
+                        indices_implicit = []
+                        for implicit_keyword in self.implicit_keywords.values():
+                            if implicit_keyword in value:
+                                start = value.index(implicit_keyword)
+                                end = start + len(implicit_keyword)
+                                for index in range(start, end):
+                                    indices_implicit.append(index)
+                        for letter_index, letter in enumerate(value):
+                            if letter_index in indices_implicit:
+                                string += blue + letter + reset
+                            else:
+                                string += brown + letter + reset
+
+                    elif type(value) is int or type(value) is float:
+                        # print numbers following color gradient from 0:white to 10:green
+                        rb = str(int((10 - value) * 25.5))
+                        color = '\033[38;2;' + rb + ';255;' + rb + 'm'
+                        string += field + ': ' + color + str(value) + reset + ' '
+
             print(string + '\n')
         print("\n")
 
