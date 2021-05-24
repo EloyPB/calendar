@@ -6,6 +6,7 @@ import tempfile
 import math
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 from pydoc import locate
 from subprocess import call
 from scipy.stats.stats import pearsonr
@@ -200,7 +201,7 @@ class Calendar:
         """
         if first_date is None:
             last_index = len(self.database)
-            first_date = datetime.strptime(self.database[-1]['date'], "%Y-%m-%d").date() - timedelta(days=num_days)
+            first_date = datetime.strptime(self.database[-1]['date'], "%Y-%m-%d").date() - timedelta(days=num_days-1)
             first_date = first_date.strftime("%Y-%m-%d")
         else:
             last_date = datetime.strptime(first_date, "%Y-%m-%d").date() + timedelta(days=num_days)
@@ -268,7 +269,7 @@ class Calendar:
             if field in day:
                 dates.append(datetime.strptime(day['date'], "%Y-%m-%d").date())
                 values.append(day[field])
-        return dates, np.array(values)
+        return np.array(dates), np.array(values)
 
     @staticmethod
     def intervals(all_dates, values):
@@ -280,7 +281,7 @@ class Calendar:
         for left, right in zip(indices[:len(indices)-1], indices[1:]):
             dates.append(all_dates[right])
             intervals.append((all_dates[right] - all_dates[left]).days)
-        return dates, intervals
+        return np.array(dates), np.array(intervals)
 
     def list_to_bool(self, field, first_index, last_index, separator=', '):
         """Transforms a field consisting on lists of items into a matrix of days x items.
@@ -322,14 +323,24 @@ class Calendar:
         return mat, mask, sorted_list
 
     @staticmethod
-    def moving_average(values, window_size):
+    def moving_average(dates, values, window_size):
         """Calculates a moving average over a window of size window_size.
         """
-        averaged = np.ma.masked_array(np.zeros(len(values)), np.zeros(len(values)))
-        averaged.mask[0:window_size-1] = True
-        for day_index in range(window_size-1, len(values)):
-            averaged[day_index] = np.mean(values[day_index-window_size+1:day_index])
-        return averaged
+        first_date = dates[0]
+        num_days = (dates[-1] - first_date).days + 1
+
+        out_dates = []
+        out_values = []
+        for day_num in range(0, num_days-window_size+1):
+            left = first_date + timedelta(days=day_num)
+            right = left + timedelta(days=window_size-1)
+            if right in dates:
+                selected_values = values[(dates >= left) & (dates <= right)]
+                if ~np.isnan(selected_values[-1]):
+                    out_values.append(np.nanmean(selected_values))
+                    out_dates.append(right)
+
+        return out_dates, out_values
 
     def get_values(self, complex_fields, first_index, last_index, averaging_window=0):
         all_values = []
@@ -351,11 +362,25 @@ class Calendar:
 
             if averaging_window and ('.b' in complex_field or '.i' in complex_field
                                      or self.types[field] in (int, float)):
-                values = self.moving_average(values, averaging_window)
+                dates, values = self.moving_average(dates, values, averaging_window)
             all_values.append(values)
             all_dates.append(dates)
 
         return all_dates, all_values
+
+    @staticmethod
+    def insert_nans(dates, values):
+        nan_dates = []
+        nan_values = []
+        for left, right, value in zip(dates[:-1], dates[1:], values[:-1]):
+            nan_dates.append(left)
+            nan_values.append(value)
+            if (right - left).days > 1:
+                nan_dates.append(left + timedelta(days=1))
+                nan_values.append(np.nan)
+        nan_dates.append(dates[-1])
+        nan_values.append(values[-1])
+        return nan_dates, nan_values
 
     def plot(self):
         """Plotting function.
@@ -385,6 +410,7 @@ class Calendar:
 
             # plot normal values
             if '.b' in complex_field in complex_field or self.types[field] in (int, float):
+                dates, values = self.insert_nans(dates, values)
                 ax.plot(dates, values, label=complex_field, color=color, marker='.')
                 ax.legend(loc='upper left')
 
@@ -399,6 +425,8 @@ class Calendar:
                 ax.eventplot(event_dates, linelengths=20, label=complex_field, color=color)
                 ax.legend(loc='upper left')
 
+        fig.autofmt_xdate()
+        axr.fmt_xdata = mdates.DateFormatter('%Y-%m-%d')
         plt.show()
 
     def histogram(self):
