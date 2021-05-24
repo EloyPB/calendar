@@ -499,19 +499,19 @@ class Calendar:
 
         fig, ax = plt.subplots(1, num_cols + 1, figsize=(11, 5), constrained_layout=True,
                                gridspec_kw={'width_ratios': [1 for _ in range(num_cols)]+[0.05]})
-        v_min = np.nanmin(corr)
-        v_max = np.nanmax(corr)
+        min_corr = np.nanmin(corr)
+        max_corr = np.nanmax(corr)
+        max_abs = max(abs(max_corr), abs(min_corr))
         for col_num in range(num_cols):
             first_index = col_num * num_rows
             last_index = (col_num + 1) * num_rows
-            mat = ax[col_num].matshow(corr[first_index:last_index], vmin=v_min, vmax=v_max)
+            mat = ax[col_num].matshow(corr[first_index:last_index], vmin=-max_abs, vmax=max_abs)
             for factor_index in range(first_index, min(last_index, len(factors_list))):
                 for time_shift in range(args.window):
                     if p[factor_index, time_shift] < p_threshold:
                         rect = plt.Rectangle((time_shift - 0.5, factor_index % num_rows - 0.5), 1, 1,
                                              edgecolor="C1", fill=False)
                         ax[col_num].add_patch(rect)
-                        print(factors_list[factor_index], time_shift)
 
             ax[col_num].set_yticks([i for i in range(min(num_rows, len(factors_list)-first_index))])
             ax[col_num].set_yticklabels(factors_list[first_index:last_index])
