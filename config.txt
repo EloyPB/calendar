@@ -1,8 +1,6 @@
-D:/MEGA/calendar.json
+/c/DATA/MEGA/calendar.json
 float sat
-float sharp
-float ph-e
-float exp
+float fz
 str text
 str food
 bool pain text:PAIN
