@@ -440,7 +440,7 @@ class Calendar:
                 day_num += 1
         return np.array(dates), sorted_list, mat
 
-    def correlate(self, p_threshold=0.05):
+    def correlate(self, p_threshold=0.02):
         """Correlates boolean variables contained in lists in factors_field with a multivalued variable."""
         np.seterr(all='ignore')
         parser = argparse.ArgumentParser()
@@ -490,7 +490,6 @@ class Calendar:
                     corr[factor_num, time_shift] = np.nan
                     p[factor_num, time_shift] = np.nan
 
-
         # plot
         num_rows = 25
         num_cols = int(min(math.ceil(num_factors / num_rows), 5))
@@ -505,12 +504,12 @@ class Calendar:
         for col_num in range(num_cols):
             first_index = col_num * num_rows
             last_index = (col_num + 1) * num_rows
-            mat = ax[col_num].matshow(corr[first_index:last_index], vmin=-max_abs, vmax=max_abs)
+            mat = ax[col_num].matshow(corr[first_index:last_index], vmin=-max_abs, vmax=max_abs, cmap='coolwarm')
             for factor_index in range(first_index, min(last_index, len(factors_list))):
                 for time_shift in range(args.window):
                     if p[factor_index, time_shift] < p_threshold:
                         rect = plt.Rectangle((time_shift - 0.5, factor_index % num_rows - 0.5), 1, 1,
-                                             edgecolor="C1", fill=False)
+                                             edgecolor="k", fill=False)
                         ax[col_num].add_patch(rect)
 
             ax[col_num].set_yticks([i for i in range(min(num_rows, len(factors_list)-first_index))])
