@@ -333,8 +333,8 @@ class Calendar:
                 dates, values = self.keyword_to_bool(field, keyword, first_index, last_index)
             else:
                 dates, values = self.read_values(field, first_index, last_index)
-                if self.types[field] in (int, float):
-                    values /= 10
+                # if self.types[field] in (int, float):
+                #     values /= 10
 
             if '.i' in complex_field:
                 dates, values = self.intervals(dates, values)
@@ -360,8 +360,8 @@ class Calendar:
         first_index, last_index = self.index_range(args.num_days, args.date)
 
         fig, ax = plt.subplots()
-        ax.set_ylim(0, 1)
-        ax.set_yticks(np.linspace(0, 1, 11))
+        ax.set_ylim(0, 10)
+        ax.set_yticks(np.linspace(0, 10, 11))
         ax.yaxis.grid()
         axr = ax.twinx()
         prop_cycle = plt.rcParams['axes.prop_cycle']
@@ -398,11 +398,26 @@ class Calendar:
         """
         parser = argparse.ArgumentParser()
         parser.add_argument("field", help="fields to plot separated by commas (without spaces)")
-        parser.add_argument("-n", "--num_days", type=int, help="number of days to plot")
+        parser.add_argument("num_days", type=int, help="number of days to plot")
+        parser.add_argument("size", type=float, help="bin size")
         parser.add_argument("-d", "--date", help="first date to plot")
         args = parser.parse_args()
 
         first_index, last_index = self.index_range(args.num_days, args.date)
+        values = self.get_values([args.field], first_index, last_index)[1][0]
+
+        fig, ax = plt.subplots()
+
+        if (max(values) - min(values)) % 1 == 0:
+            bins = int(max(values) / args.size) + 1
+            hist_range = (-args.size/2, int(max(values) / args.size) * args.size + args.size/2)
+        else:
+            bins = int(10 / args.size) + 1
+            hist_range = (-args.size/2, 10 + args.size/2)
+            ax.axvline(5, color='k', linestyle='dashed')
+
+        ax.hist(values, bins=bins, range=hist_range)
+        plt.show()
 
     def lists_to_mat(self, field, first_index, last_index, separator=', '):
         """Transforms a field consisting on lists of items into a matrix of days x items.
@@ -517,4 +532,7 @@ class Calendar:
             ax[col_num].xaxis.set_ticks_position('top')
         fig.colorbar(mat, cax=ax[-1])
         plt.show()
+
+    def by_date(self):
+        pass
 
