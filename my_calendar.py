@@ -406,7 +406,7 @@ class Calendar:
         first_index, last_index = self.index_range(args.num_days, args.date)
         values = self.get_values([args.field], first_index, last_index)[1][0]
 
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(1, 2, figsize=(8.5, 4))
 
         if (max(values) - min(values)) % 1 == 0:
             bins = int(max(values) / args.size) + 1
@@ -414,9 +414,11 @@ class Calendar:
         else:
             bins = int(10 / args.size) + 1
             hist_range = (-args.size/2, 10 + args.size/2)
-            ax.axvline(5, color='k', linestyle='dashed')
+            ax[0].axvline(5, color='k', linestyle='dashed')
 
-        ax.hist(values, bins=bins, range=hist_range)
+        ax[0].hist(values, bins=bins, range=hist_range)
+        ax[1].hist(values, bins=bins, range=hist_range, density=True, cumulative=True)
+        plt.tight_layout()
         plt.show()
 
     def lists_to_mat(self, field, first_index, last_index, separator=', '):
