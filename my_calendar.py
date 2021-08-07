@@ -427,7 +427,7 @@ class Calendar:
 
         fig, ax = plt.subplots(figsize=(4, 3))
 
-        if (max(values) - min(values)) % 1 == 0:
+        if ".i" in args.field:
             bins = int(max(values) / args.size) + 1
             hist_range = (-args.size/2, int(max(values) / args.size) * args.size + args.size/2)
             ax.set_xlabel("Days")
