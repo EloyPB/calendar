@@ -10,6 +10,7 @@ import matplotlib.dates as mdates
 from pydoc import locate
 from subprocess import call
 from scipy.stats.stats import pearsonr
+from scipy.stats import lognorm, gamma, norm
 from datetime import date, datetime, timedelta
 
 
@@ -393,6 +394,23 @@ class Calendar:
         axr.fmt_xdata = mdates.DateFormatter('%Y-%m-%d')
         plt.show()
 
+    @staticmethod
+    def log_norm(data, max_x, ax):
+        shape, loc, scale = lognorm.fit(data)
+        x = np.linspace(0, max_x, 100)
+        pdf = lognorm.pdf(x, shape, loc, scale)
+        ax.plot(x, pdf, 'C1')
+
+    @staticmethod
+    def gamma(data, max_x, ax):
+        x = np.linspace(0, max_x, 100)
+        ax.plot(x, gamma.pdf(x, *gamma.fit(data)), 'C1')
+
+    @staticmethod
+    def normal(data, max_x, ax):
+        x = np.linspace(0, max_x, 100)
+        ax.plot(x, norm.pdf(x, *norm.fit(data)), 'C1')
+
     def histogram(self):
         """Plots a histogram.
         """
@@ -401,23 +419,37 @@ class Calendar:
         parser.add_argument("num_days", type=int, help="number of days to plot")
         parser.add_argument("size", type=float, help="bin size")
         parser.add_argument("-d", "--date", help="first date to plot")
+        parser.add_argument("-f", "--fit", help="normal, log-normal or gamma", default=None)
         args = parser.parse_args()
 
         first_index, last_index = self.index_range(args.num_days, args.date)
         values = self.get_values([args.field], first_index, last_index)[1][0]
 
-        fig, ax = plt.subplots(1, 2, figsize=(8.5, 4))
+        fig, ax = plt.subplots(figsize=(4, 3))
 
         if (max(values) - min(values)) % 1 == 0:
             bins = int(max(values) / args.size) + 1
             hist_range = (-args.size/2, int(max(values) / args.size) * args.size + args.size/2)
+            ax.set_xlabel("Days")
+            max_x = max(values)
         else:
             bins = int(10 / args.size) + 1
             hist_range = (-args.size/2, 10 + args.size/2)
-            ax[0].axvline(5, color='k', linestyle='dashed')
+            ax.axvline(5, color='k', linestyle='dashed')
+            max_x = 10
 
-        ax[0].hist(values, bins=bins, range=hist_range)
-        ax[1].hist(values, bins=bins, range=hist_range, density=True, cumulative=True)
+        ax.hist(values, bins=bins, range=hist_range, density=True)
+
+        if args.fit is not None:
+            if args.fit == "normal":
+                self.normal(values[~np.isnan(values)], max_x, ax)
+            elif args.fit == "log-normal":
+                self.log_norm(values[~np.isnan(values)], max_x, ax)
+            elif args.fit == "gamma":
+                self.gamma(values[~np.isnan(values)], max_x, ax)
+            else:
+                print("distribution not recognized!")
+
         plt.tight_layout()
         plt.show()
 
