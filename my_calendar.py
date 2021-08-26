@@ -267,9 +267,15 @@ class Calendar:
         dates = []
         values = []
         found_streak = False
+        last_date = datetime.strptime(self.database[first_index]['date'], "%Y-%m-%d").date() - timedelta(days=1)
         for day in self.database[first_index:last_index]:
             if field in day:
-                dates.append(datetime.strptime(day['date'], "%Y-%m-%d").date())
+                day_date = datetime.strptime(day['date'], "%Y-%m-%d").date()
+                if day_date != last_date + timedelta(days=1):
+                    dates.append(last_date + timedelta(days=1))
+                    values.append(np.nan)
+                last_date = day_date
+                dates.append(day_date)
                 values.append(day[field])
                 found_streak = True
             elif found_streak:
@@ -284,7 +290,7 @@ class Calendar:
         """
         dates = []
         intervals = []
-        indices = np.nonzero(values)[0]
+        indices = np.nonzero(values == 1 & ~np.isnan(values))[0]
         for left, right in zip(indices[:len(indices)-1], indices[1:]):
             dates.append(all_dates[right])
             intervals.append((all_dates[right] - all_dates[left]).days)
@@ -334,8 +340,6 @@ class Calendar:
                 dates, values = self.keyword_to_bool(field, keyword, first_index, last_index)
             else:
                 dates, values = self.read_values(field, first_index, last_index)
-                # if self.types[field] in (int, float):
-                #     values /= 10
 
             if '.i' in complex_field:
                 dates, values = self.intervals(dates, values)
@@ -386,7 +390,7 @@ class Calendar:
 
             # plot events
             elif ':' in complex_field or self.types[field] is bool:
-                event_dates = [date for date, value in zip(dates, values) if value]
+                event_dates = [date for date, value in zip(dates, values) if value and ~np.isnan(value)]
                 ax.eventplot(event_dates, linelengths=20, label=complex_field, color=color)
                 ax.legend(loc='upper left')
 
