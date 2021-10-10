@@ -7,52 +7,29 @@ import math
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
-from pydoc import locate
 from subprocess import call
 from scipy.stats.stats import pearsonr
 from scipy.stats import lognorm, gamma, norm
 from datetime import date, datetime, timedelta
+from config import path, fields
 
 
 class Calendar:
     def __init__(self):
         """Reads the database path and fields from a configuration file and loads the database.
         """
+        # Load database
+        self.path = path
         try:
-            with open('config.txt') as f:
-                lines = [line.rstrip('\n') for line in f]
-                self.path = lines[0]
-                self.fields = []
-                self.types = {}
-                self.implicit_sources = {}
-                self.implicit_keywords = {}
-
-                for line in lines[1:]:
-                    words = line.split()
-                    self.fields.append(words[1])
-                    self.types[words[1]] = locate(words[0])
-                    if len(words) > 2:
-                        self.implicit_sources[words[1]] = words[2].split(':')[0]
-                        self.implicit_keywords[words[1]] = words[2].split(':')[1]
-
-                try:
-                    with open(self.path, 'r', encoding='utf-8') as f:
-                        self.database = json.load(f)
-                except FileNotFoundError:
-                    print('Database not found, creating a new one...')
-                    self.database = []
-                    self.dump()
-
+            with open(self.path, 'r', encoding='utf-8') as f:
+                self.database = json.load(f)
         except FileNotFoundError:
-            print("\nConfiguration file not found. \nPlease create a file named 'config.txt' in this directory."
-                  "\nThe first line must contain the path to the file where the data will be saved, "
-                  "including the desired file name ending with .json."
-                  "\nIn subsequent lines declare the fields to be recorded. Each line must consist of a type "
-                  "(int, float, bool, str) followed by a space and the name of the field. "
-                  "\nIt is also possible to add implicit boolean fields "
-                  "which will take a value of True if a keyword is mentioned in the string of another field. "
-                  "\nFor implicit fields, the lines should look like: 'bool field_name source_field:keyword'\n")
-            exit()
+            print('Database not found, creating a new one...')
+            self.database = []
+            self.dump()
+
+        self.active_fields = fields['active']
+        self.all_fields = {**fields['active'], **fields['inactive']}
 
     def dump(self):
         """Writes to the database file.
@@ -66,12 +43,12 @@ class Calendar:
         new_database = []
         for day in self.database:
             new_day = {'date': day['date']}
-            for field in self.fields:
-                if field in day:
-                    new_day[field] = day[field]
-            for field in day:
-                if field not in self.fields:
-                    new_day[field] = day[field]
+            for field_name in self.all_fields.keys():
+                if field_name in day:
+                    new_day[field_name] = day[field_name]
+            for field_name in day:
+                if field_name not in self.all_fields.keys():
+                    new_day[field_name] = day[field_name]
             new_database.append(new_day)
 
         self.database = new_database
@@ -80,27 +57,28 @@ class Calendar:
     def fill_fields(self, day):
         """Asks the user to input values for the explicit fields and adds them to the day's dictionary.
         """
-        for field in self.fields:
-            if field not in self.implicit_keywords:
+        for field_name, field_specs in self.active_fields.items():
+            if 'in' not in field_specs:
                 while True:
-                    value = input(field + ': ')
+                    value = input(field_name + ': ')
                     if value != '':
                         try:
-                            day[field] = self.types[field](value)
+                            day[field_name] = field_specs['type'](value)
                             break
                         except ValueError:
-                            print("Expecting " + str(self.types[field]))
+                            print(f"Expecting {field_specs['type']}")
                     else:
                         break
 
     def fill_implicit_fields(self, day):
         """Checks for implicit fields and adds them to the day's dictionary.
         """
-        for field, keyword in self.implicit_keywords.items():
-            if self.implicit_sources[field] in day:
-                day[field] = keyword in day[self.implicit_sources[field]]
-            else:
-                day[field] = False
+        for field_name, field_specs in self.active_fields.items():
+            if 'match' in field_specs:
+                if field_specs['in'] in day:
+                    day[field_name] = field_specs['match'] in day[field_specs['in']]
+                else:
+                    day[field_name] = False
 
     @staticmethod
     def visual_aid():
@@ -142,7 +120,8 @@ class Calendar:
                 print("\nData for", calendar.day_name[processing_date.weekday()], processing_date, "\n")
 
                 # if any of the fields expects a number, print a scale from 0 to 10 as a visual aid
-                if int in self.types.values() or float in self.types.values():
+                field_types = [specs['type'] for specs in self.active_fields.values()]
+                if int in field_types or float in field_types:
                     print(self.visual_aid())
 
                 day = {'date': str(processing_date)}
@@ -180,16 +159,14 @@ class Calendar:
         day = json.dumps(self.database[edit_index], indent=4, separators=(',', ': '), ensure_ascii=False)
 
         with tempfile.NamedTemporaryFile(suffix=".tmp") as tf:
-            if int in self.types.values() or float in self.types.values():
-                initial_string = self.visual_aid() + '\n'
-                tf.write(bytes(initial_string, 'utf-8'))
+            initial_string = self.visual_aid() + '\n'
+            tf.write(bytes(initial_string, 'utf-8'))
             tf.write(bytes(day, 'utf-8'))
             tf.flush()
             editor = os.environ.get('EDITOR', 'vim')
             call([editor, tf.name])
 
-            if int in self.types.values() or float in self.types.values():
-                tf.seek(len(initial_string))
+            tf.seek(len(initial_string))
             edited_day = json.loads(tf.read())
             self.fill_implicit_fields(edited_day)
             self.database[edit_index] = edited_day
@@ -233,30 +210,44 @@ class Calendar:
             day = self.database[day_index]
             processing_date = datetime.strptime(day['date'], "%Y-%m-%d").date()
             string = processing_date.strftime("%A %Y-%m-%d") + "  "
-            for field in self.fields:
-                if field in day and field not in self.implicit_keywords:
-                    value = day[field]
-                    if type(value) is str:
-                        # print strings in light brown, with implicit field keywords in light blue
-                        string += '\n' + field + ': '
-                        indices_implicit = []
-                        for implicit_keyword in self.implicit_keywords.values():
-                            if implicit_keyword in value:
-                                start = value.index(implicit_keyword)
-                                end = start + len(implicit_keyword)
-                                for index in range(start, end):
-                                    indices_implicit.append(index)
-                        for letter_index, letter in enumerate(value):
-                            if letter_index in indices_implicit:
-                                string += blue + letter + reset
-                            else:
-                                string += brown + letter + reset
+            string += " " * (9 - len(string.split()[0]))
 
-                    elif type(value) is int or type(value) is float:
+            # print all numbers first
+            for field_name, value in day.items():
+                if field_name == "date":
+                    continue
+                if type(value) is int or type(value) is float:
+                    if field_name in self.all_fields and 'range' in self.all_fields[field_name]:
                         # print numbers following color gradient from 0:white to 10:green
-                        rb = str(int((10 - value) * 25.5))
+                        minimum, maximum = self.all_fields[field_name]['range']
+                        rb = str(int((1 - (value - minimum) / (maximum - minimum)) * 255))
                         color = '\033[38;2;' + rb + ';255;' + rb + 'm'
-                        string += field + ': ' + color + str(value) + reset + ' '
+                        string += field_name + ': ' + color + str(value) + reset + '  '
+                    else:
+                        string += field_name + ': ' + str(value) + '  '
+
+            # print text fields
+            for field_name, value in day.items():
+                if field_name == "date":
+                    continue
+                if type(value) is str:
+                    # print strings in light brown, with implicit field keywords in light blue
+                    string += '\n' + field_name + ': '
+                    indices_implicit = []
+
+                    for f_name, f_specs in self.all_fields.items():
+                        if 'in' in f_specs and f_specs['in'] == field_name:
+                            keyword = f_specs['match']
+                            if keyword in value:
+                                start = value.index(keyword)
+                                end = start + len(keyword)
+                                indices_implicit += list(range(start, end))
+
+                    for letter_index, letter in enumerate(value):
+                        if letter_index in indices_implicit:
+                            string += blue + letter + reset
+                        else:
+                            string += brown + letter + reset
 
             print(string + '\n')
         print("\n")
@@ -266,23 +257,31 @@ class Calendar:
         """
         dates = []
         values = []
-        found_streak = False
-        last_date = datetime.strptime(self.database[first_index]['date'], "%Y-%m-%d").date() - timedelta(days=1)
         for day in self.database[first_index:last_index]:
             if field in day:
-                day_date = datetime.strptime(day['date'], "%Y-%m-%d").date()
-                if day_date != last_date + timedelta(days=1):
-                    dates.append(last_date + timedelta(days=1))
-                    values.append(np.nan)
-                last_date = day_date
-                dates.append(day_date)
-                values.append(day[field])
-                found_streak = True
-            elif found_streak:
                 dates.append(datetime.strptime(day['date'], "%Y-%m-%d").date())
-                values.append(np.nan)
-                found_streak = False
+                values.append(day[field])
+
+        if 'range' in self.all_fields[field]:
+            minimum, maximum = self.all_fields[field]['range']
+            values = (np.array(values) - minimum) / (maximum - minimum) * 10
+        elif self.all_fields[field]['type'] == bool:
+            values = np.array(values)*10
+
+        dates, values = self.add_nans(dates, values)
         return np.array(dates), np.array(values)
+
+    @staticmethod
+    def add_nans(dates, values):
+        nan_dates = [dates[0]]
+        nan_values = [values[0]]
+        for day_date, value in zip(dates[1:], values[1:]):
+            if nan_dates[-1] != np.nan and day_date - nan_dates[-1] > timedelta(days=1):
+                nan_dates.append(nan_dates[-1] + timedelta(days=1))
+                nan_values.append(np.nan)
+            nan_dates.append(day_date)
+            nan_values.append(value)
+        return nan_dates, nan_values
 
     @staticmethod
     def intervals(all_dates, values):
@@ -290,7 +289,7 @@ class Calendar:
         """
         dates = []
         intervals = []
-        indices = np.nonzero(values == 1 & ~np.isnan(values))[0]
+        indices = np.nonzero(values == 10)[0]
         for left, right in zip(indices[:len(indices)-1], indices[1:]):
             dates.append(all_dates[right])
             intervals.append((all_dates[right] - all_dates[left]).days)
@@ -327,7 +326,8 @@ class Calendar:
                 keyword_found = True
             values.append(keyword_found)
             dates.append(datetime.strptime(day['date'], "%Y-%m-%d").date())
-        return np.array(dates), np.array(values)
+        dates, values = self.add_nans(dates, values)
+        return np.array(dates), np.array(values)*10
 
     def get_values(self, complex_fields, first_index, last_index, averaging_window=0):
         all_values = []
@@ -345,7 +345,7 @@ class Calendar:
                 dates, values = self.intervals(dates, values)
 
             if averaging_window and ('.b' in complex_field or '.i' in complex_field
-                                     or self.types[field] in (int, float)):
+                                     or self.all_fields[field]['type'] in (int, float)):
                 dates, values = self.moving_average(dates, values, averaging_window)
             all_values.append(values)
             all_dates.append(dates)
@@ -379,7 +379,7 @@ class Calendar:
             field = complex_field.split(':')[0].split('.')[0]
 
             # plot normal values
-            if '.b' in complex_field in complex_field or self.types[field] in (int, float):
+            if '.b' in complex_field in complex_field or self.all_fields[field]['type'] in (int, float):
                 ax.plot(dates, values, label=complex_field, color=color, marker='.')
                 ax.legend(loc='upper left')
 
@@ -389,7 +389,7 @@ class Calendar:
                 axr.legend(loc='upper right')
 
             # plot events
-            elif ':' in complex_field or self.types[field] is bool:
+            elif ':' in complex_field or self.all_fields[field]['type'] is bool:
                 event_dates = [date for date, value in zip(dates, values) if value and ~np.isnan(value)]
                 ax.eventplot(event_dates, linelengths=20, label=complex_field, color=color)
                 ax.legend(loc='upper left')
