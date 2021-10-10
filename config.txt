@@ -1,6 +1,0 @@
-/c/DATA/MEGA/calendar.json
-float sat
-float fz
-str text
-str food
-bool pain text:PAIN
