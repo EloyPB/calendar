@@ -5,7 +5,6 @@ fields = {
         "sat": {"type": float, "range": (0, 10)},
         "fz": {"type": float, "range": (0, 10)},
         "text": {"type": str},
-        "food": {"type": str},
         "pain": {"type": bool, "in": "text", "match": "PAIN"},
     },
     "inactive": {
@@ -17,6 +16,7 @@ fields = {
         "ph-e": {"type": float, "range": (0, 10)},  # physical exercise
         "exp": {"type": float, "range": (0, 10)},  # new experiences
         "sharp": {"type": float, "range": (0, 10)},  # mental clarity
+        "food": {"type": str},  # list of foods, in spanish, separated by commas
     }
 }
 
