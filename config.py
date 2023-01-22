@@ -3,7 +3,6 @@ path = "/c/DATA/MEGA/calendar.json"
 fields = {
     "active": {
         "sat": {"type": float, "range": (0, 10)},
-        "fz": {"type": float, "range": (0, 10)},
         "text": {"type": str},
         "pain": {"type": bool, "in": "text", "match": "PAIN"},
     },
@@ -17,6 +16,7 @@ fields = {
         "exp": {"type": float, "range": (0, 10)},  # new experiences
         "sharp": {"type": float, "range": (0, 10)},  # mental clarity
         "food": {"type": str},  # list of foods, in spanish, separated by commas
+        "fz": {"type": float, "range": (0, 10)},  # prodromey feeling
     }
 }
 

@@ -173,31 +173,34 @@ class Calendar:
 
         self.dump()
 
-    def index_range(self, num_days, first_date=None):
+    def index_range(self, num_days=None, last_date=None):
         """Finds the first and last index corresponding to a period of num_days ending on the
-        last date (default) or starting on first_date.
+        last date.
         """
-        if first_date is None:
-            last_index = len(self.database)
-            first_date = datetime.strptime(self.database[-1]['date'], "%Y-%m-%d").date() - timedelta(days=num_days-1)
-            first_date = first_date.strftime("%Y-%m-%d")
+        if last_date is None:
+            last_index = len(self.database) - 1
+            last_date = self.database[last_index]['date']
         else:
-            last_date = datetime.strptime(first_date, "%Y-%m-%d").date() + timedelta(days=num_days)
-            last_index = self.date_to_index(last_date.strftime("%Y-%m-%d"))
+            last_index = self.date_to_index(last_date)
 
-        first_index = self.date_to_index(first_date)
+        if num_days <= 0:
+            first_index = 0
+        else:
+            first_date = datetime.strptime(last_date, "%Y-%m-%d").date() - timedelta(days=num_days)
+            first_date = first_date.strftime("%Y-%m-%d")
+            first_index = self.date_to_index(first_date)
 
-        return first_index, last_index
+        return first_index, last_index + 1
 
     def display(self):
         """Displays on the terminal a period of num_days ending on the
-        last date (default) or starting on first_date.
+        last date.
         """
         print("\n")
 
         parser = argparse.ArgumentParser()
         parser.add_argument("num_days", type=int, help="number of days to display")
-        parser.add_argument("-d", "--date", help="first date to display")
+        parser.add_argument("-d", "--date", help="last date to display")
         args = parser.parse_args()
 
         brown = '\033[38;5;180m'
@@ -358,7 +361,7 @@ class Calendar:
         parser = argparse.ArgumentParser()
         parser.add_argument("fields", help="fields to plot separated by commas (without spaces)")
         parser.add_argument("num_days", type=int, help="number of days to plot")
-        parser.add_argument("-d", "--date", help="first date to plot")
+        parser.add_argument("-d", "--date", help="last date to plot")
         parser.add_argument("-a", "--average", type=int, help="window size in days")
         args = parser.parse_args()
 
@@ -422,7 +425,7 @@ class Calendar:
         parser.add_argument("field", help="fields to plot separated by commas (without spaces)")
         parser.add_argument("num_days", type=int, help="number of days to plot")
         parser.add_argument("size", type=float, help="bin size")
-        parser.add_argument("-d", "--date", help="first date to plot")
+        parser.add_argument("-d", "--date", help="last date to plot")
         parser.add_argument("-f", "--fit", help="normal, log-normal or gamma", default=None)
         args = parser.parse_args()
 
@@ -454,6 +457,7 @@ class Calendar:
             else:
                 print("distribution not recognized!")
 
+        ax.spines[['right', 'top']].set_visible(False)
         plt.tight_layout()
         plt.show()
 
