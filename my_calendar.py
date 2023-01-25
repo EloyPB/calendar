@@ -4,6 +4,7 @@ import calendar
 import argparse
 import tempfile
 import math
+import locale
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
@@ -332,7 +333,7 @@ class Calendar:
         dates, values = self.add_nans(dates, values)
         return np.array(dates), np.array(values)*10
 
-    def get_values(self, complex_fields, first_index, last_index, averaging_window=0):
+    def get_values(self, complex_fields, first_index, last_index):
         all_values = []
         all_dates = []
 
@@ -347,9 +348,6 @@ class Calendar:
             if '.i' in complex_field:
                 dates, values = self.intervals(dates, values)
 
-            if averaging_window and ('.b' in complex_field or '.i' in complex_field
-                                     or self.all_fields[field]['type'] in (int, float)):
-                dates, values = self.moving_average(dates, values, averaging_window)
             all_values.append(values)
             all_dates.append(dates)
 
@@ -358,11 +356,6 @@ class Calendar:
     def plot(self):
         """Plotting function.
         """
-
-        # TODO: Plot moving average on top of the raw data
-        # TODO: Do not show auxiliary axis when not necessary
-        # TODO: Only show days on the x axis
-
         parser = argparse.ArgumentParser()
         parser.add_argument("fields", help="fields to plot separated by commas (without spaces)")
         parser.add_argument("num_days", type=int, help="number of days to plot")
@@ -373,28 +366,37 @@ class Calendar:
         first_index, last_index = self.index_range(args.num_days, args.date)
 
         fig, ax = plt.subplots()
-        ax.set_ylim(0, 10)
-        ax.set_yticks(np.linspace(0, 10, 11))
-        ax.yaxis.grid()
-        axr = ax.twinx()
+        axr = None
+
         prop_cycle = plt.rcParams['axes.prop_cycle']
         colors = prop_cycle.by_key()['color']
 
         complex_fields = args.fields.split(',')
-        all_dates, all_values = self.get_values(complex_fields, first_index, last_index, args.average)
+        all_dates, all_values = self.get_values(complex_fields, first_index, last_index)
+        only_increments = True
         for plot_num, (complex_field, dates, values) in enumerate(zip(complex_fields, all_dates, all_values)):
             color = colors[plot_num % len(colors)]
             field = complex_field.split(':')[0].split('.')[0]
 
             # plot normal values
-            if '.b' in complex_field in complex_field or self.all_fields[field]['type'] in (int, float):
-                ax.plot(dates, values, label=complex_field, color=color, marker='.')
-                ax.legend(loc='upper left')
+            if '.b' in complex_field or '.i' in complex_field or self.all_fields[field]['type'] in (int, float):
+                axis = ax
+                loc = "upper left"
+                if '.i' in complex_field:
+                    if len(complex_fields) > 1:
+                        axr = ax.twinx()
+                        axis = axr
+                        loc = "upper right"
+                else:
+                    only_increments = False
 
-            # plot intervals on a new axis
-            elif '.i' in complex_field:
-                axr.plot(dates, values, label=complex_field, color=color, marker='.')
-                axr.legend(loc='upper right')
+                axis.plot(dates, values, label=complex_field, color=color, marker='.', alpha=0.5 if args.average else 1)
+                axis.legend(loc=loc)
+
+                # average values
+                if args.average:
+                    avg_dates, avg_values = self.moving_average(dates, values, args.average)
+                    axis.plot(avg_dates, avg_values, label=f"{complex_field} avg", color=color)
 
             # plot events
             elif ':' in complex_field or self.all_fields[field]['type'] is bool:
@@ -402,8 +404,19 @@ class Calendar:
                 ax.eventplot(event_dates, linelengths=20, label=complex_field, color=color)
                 ax.legend(loc='upper left')
 
-        fig.autofmt_xdate()
-        axr.fmt_xdata = mdates.DateFormatter('%Y-%m-%d')
+            if not only_increments:
+                ax.set_ylim(0, 10)
+                ax.set_yticks(np.linspace(0, 10, 11))
+            ax.yaxis.grid()
+
+            if axr is None:
+                ax.spines[['top', 'right']].set_visible(False)
+
+        locale.setlocale(locale.LC_ALL, 'en_US.utf8')
+        locator = mdates.AutoDateLocator(minticks=3, maxticks=7)
+        formatter = mdates.ConciseDateFormatter(locator)
+        ax.xaxis.set_major_locator(locator)
+        ax.xaxis.set_major_formatter(formatter)
         plt.show()
 
     @staticmethod
