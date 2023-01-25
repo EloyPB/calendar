@@ -186,7 +186,7 @@ class Calendar:
         if num_days <= 0:
             first_index = 0
         else:
-            first_date = datetime.strptime(last_date, "%Y-%m-%d").date() - timedelta(days=num_days)
+            first_date = datetime.strptime(last_date, "%Y-%m-%d").date() - timedelta(days=num_days - 1)
             first_date = first_date.strftime("%Y-%m-%d")
             first_index = self.date_to_index(first_date)
 
@@ -212,8 +212,8 @@ class Calendar:
         for day_index in range(first_index, last_index):
             day = self.database[day_index]
             processing_date = datetime.strptime(day['date'], "%Y-%m-%d").date()
-            string = processing_date.strftime("%A %Y-%m-%d") + "  "
-            string += " " * (9 - len(string.split()[0]))
+            string = processing_date.strftime("%Y-%m-%d  %A")
+            string += " " * (12 - len(string.split()[1]))
 
             # print all numbers first
             for field_name, value in day.items():
@@ -358,6 +358,11 @@ class Calendar:
     def plot(self):
         """Plotting function.
         """
+
+        # TODO: Plot moving average on top of the raw data
+        # TODO: Do not show auxiliary axis when not necessary
+        # TODO: Only show days on the x axis
+
         parser = argparse.ArgumentParser()
         parser.add_argument("fields", help="fields to plot separated by commas (without spaces)")
         parser.add_argument("num_days", type=int, help="number of days to plot")
