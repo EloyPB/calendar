@@ -3,13 +3,13 @@ import locale
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib.ticker import MaxNLocator
 from datetime import datetime, timedelta
 
 
 num_top_artists = 20
-num_time_bins = 12
 num_side_days = 10
-num_shuffles = 1000
+num_shuffles = 2000
 
 
 calendar_path = '/c/DATA/CLOUD/calendar.json'
@@ -31,6 +31,10 @@ scrobbles.loc[~scrobbles['artist'].isin(top_artists), 'artist'] = 'Other'
 
 scrobble_ord_dates = scrobbles['ord_date'].to_numpy()
 
+first_ord_date = scrobbles['ord_date'].iat[0]
+last_ord_date = scrobbles['ord_date'].iat[-1]
+num_days = last_ord_date - first_ord_date + 1
+
 
 # load migraines
 with open(calendar_path, 'r') as file:
@@ -38,14 +42,13 @@ with open(calendar_path, 'r') as file:
 
 pain_dates = [pd.Timestamp(entry['date']) for entry in data if entry.get('pain') == True]
 pain_dates = [pain_date for pain_date in pain_dates if pain_date >= scrobbles['utc_time'].iat[0]]
-pain_ord_dates = [pain_date.toordinal() for pain_date in pain_dates]
-num_pains = len(pain_dates)
+pain_ord_dates = np.array([pain_date.toordinal() for pain_date in pain_dates])
+pain_ord_dates = pain_ord_dates[(pain_ord_dates - num_side_days >= first_ord_date) & (pain_ord_dates + num_side_days <= last_ord_date)]
+num_pains = len(pain_ord_dates)
 
 
 # count top artist scrobbles in each day
-first_ord_date = scrobbles['ord_date'].iat[0]
-last_ord_date = scrobbles['ord_date'].iat[-1]
-num_days = last_ord_date - first_ord_date + 1
+
 artist_day_counts = np.zeros((num_days, num_top_artists))
 total_day_counts = np.zeros(num_days)
 
@@ -82,26 +85,43 @@ for pain_num in range(num_pains):
     
             
             
-aligned_fractions = aligned_scrobbles / aligned_totals
+# aligned_fractions = aligned_scrobbles / aligned_totals
+aligned_fractions = aligned_scrobbles
 
 
 # shuffles 
 rng = np.random.default_rng()
 shuffled_fractions = np.empty((num_shuffles, num_top_artists))
+
+pain_date_nums = np.array(pain_ord_dates) - first_ord_date
 for shuffle_num in range(num_shuffles):
-    random_idx = rng.choice(num_days, num_pains)
-    shuffled_fractions[shuffle_num, :] = artist_day_counts[random_idx, :].sum(axis=0) / sum(total_day_counts[random_idx])
+    random_idx = pain_date_nums + rng.integers(-num_side_days, num_side_days, size=num_pains)
+    # shuffled_fractions[shuffle_num, :] = artist_day_counts[random_idx, :].sum(axis=0) / sum(total_day_counts[random_idx])
+    shuffled_fractions[shuffle_num, :] = artist_day_counts[random_idx, :].sum(axis=0)
     
-    
-y5 = np.percentile(shuffled_fractions, 2.5, axis=0)
-y95 = np.percentile(shuffled_fractions, 97.5, axis=0)
+
+y1 = np.percentile(shuffled_fractions, 1, axis=0)
+y99 = np.percentile(shuffled_fractions, 99, axis=0)
+y5 = np.percentile(shuffled_fractions, 5, axis=0)
+y95 = np.percentile(shuffled_fractions, 95, axis=0)
 
 for artist_num in range(num_top_artists):
     fig, ax = plt.subplots()
     x = range(-num_side_days, num_side_days+1)
     ax.axvline(0, color='k', linestyle=':')
-    ax.fill_between(x, y5[artist_num], y95[artist_num], alpha=0.2)
-    ax.plot(x, aligned_fractions[artist_num, :])
-    ax.title(top_artists[artist_num])
+    ax.fill_between(x, y1[artist_num], y99[artist_num], color=np.array((179, 198, 255))/255, 
+                    edgecolor='none', label='shuffled 99th percentile')
+    ax.fill_between(x, y5[artist_num], y95[artist_num], color=np.array((128, 159, 255))/255, 
+                    edgecolor='none', label='shuffled 95th percentile')
+    ax.plot(x, aligned_fractions[artist_num, :], color='k')
+    ax.set_title(top_artists[artist_num])
     ax.spines['right'].set_visible(False)
     ax.spines['top'].set_visible(False)
+    ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+    ax.legend(loc='upper right')
+    y_min, y_max = ax.get_ylim()
+    ax.set_ylim((y_min, y_max*1.2))
+    ax.set_ylabel('Scrobbles')
+    ax.set_xlabel('Days from migraine')   
+    artist_name = top_artists[artist_num].replace('/', '')
+    fig.savefig(f'/home/eloy/Desktop/scrobbles/{artist_name}.png', dpi=300)
